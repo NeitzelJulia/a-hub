@@ -10,3 +10,9 @@
 /backend/mvnw
 /backend/mvnw.cmd
 /backend/.mvn
+
+#Frontend
+/frontend/node_modules
+/frontend/dist
+/frontend/dist-ssr
+/frontend/*.local
