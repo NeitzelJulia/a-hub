@@ -38,9 +38,12 @@ export default function WebRTCClient() {
     const getLocalAudioTrack = () =>
         localStreamRef.current?.getAudioTracks?.()[0] ?? null;
 
-    // Relativer WS-Pfad über Vite-Proxy
-    const wsProto = location.protocol === "https:" ? "wss" : "ws";
-    const WS_URL = `${wsProto}://${location.host}/socket`;
+    // WS-URL
+    if (!import.meta.env.VITE_SIGNALING_WS_URL) {
+        throw new Error("VITE_SIGNALING_WS_URL muss gesetzt sein!");
+    }
+    const WS_URL: string = import.meta.env.VITE_SIGNALING_WS_URL;
+
 
     useEffect(() => {
         // 1) WebSocket verbinden
@@ -49,7 +52,7 @@ export default function WebRTCClient() {
         ws.onopen = () => setWsOpen(true);
         ws.onclose = () => setWsOpen(false);
 
-        const beforeUnload = () => { try { ws.close(); } catch {} };
+        const beforeUnload = () => { try { ws.close(); } catch {/* noop: ws already closed */} };
         window.addEventListener("beforeunload", beforeUnload);
 
         // 2) PeerConnection
@@ -128,18 +131,20 @@ export default function WebRTCClient() {
         // Cleanup
         return () => {
             window.removeEventListener("beforeunload", beforeUnload);
-            try { ws.close(); } catch {}
+            try { ws.close(); } catch {/* noop */}
             try {
                 pc.getSenders().forEach((s) => s.track?.stop());
                 pc.close();
-            } catch {}
+            } catch {/* noop */}
         };
     }, [WS_URL]);
 
     // A/V starten
     const startAV = async () => {
         setAvError(null);
-        const supported = !!(navigator as any).mediaDevices?.getUserMedia;
+        const supported =
+            typeof navigator !== "undefined" &&
+            !!navigator.mediaDevices?.getUserMedia;
         if (!supported) {
             setAvError(
                 window.isSecureContext
@@ -169,8 +174,10 @@ export default function WebRTCClient() {
             // Mic initial an
             const at = getLocalAudioTrack();
             if (at) { at.enabled = true; setMicOn(true); }
-        } catch (err: any) {
-            setAvError(`getUserMedia fehlgeschlagen: ${err?.name || err?.message || String(err)}`);
+        } catch (err: unknown) {
+            const message =
+                err instanceof Error ? (err.name || err.message) : String(err);
+            setAvError(`getUserMedia fehlgeschlagen: ${message}`);
         }
     };
 
