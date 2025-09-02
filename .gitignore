@@ -1,5 +1,6 @@
 .idea
 *.iml
+*.pem
 
 #Backend
 /backend/HELP.md
@@ -16,5 +17,4 @@
 /frontend/dist
 /frontend/dist-ssr
 /frontend/*.local
-/certs/192.168.0.163.pem
-/certs/192.168.0.163-key.pem
+
