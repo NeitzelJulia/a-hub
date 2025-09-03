@@ -1,5 +1,6 @@
 .idea
 *.iml
+*.pem
 
 #Backend
 /backend/HELP.md
@@ -16,3 +17,4 @@
 /frontend/dist
 /frontend/dist-ssr
 /frontend/*.local
+
