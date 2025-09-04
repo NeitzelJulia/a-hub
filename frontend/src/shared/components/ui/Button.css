@@ -1,0 +1,55 @@
+.btn {
+    font-size: 14px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Farb-Varianten */
+.btn-primary {
+    background: #2ecc71; /* grün */
+    color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+    background: #27ae60;
+}
+
+.btn-secondary {
+    background: #eee;
+    color: #000;
+}
+.btn-secondary:hover:not(:disabled) {
+    background: #ddd;
+}
+
+.btn-dark {
+    background: #333;
+    color: #fff;
+}
+.btn-dark:hover:not(:disabled) {
+    background: #444;
+}
+
+.btn-danger {
+    background: #e74c3c;
+    color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+    background: #c0392b;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: inherit;
+}
+.btn-ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
