@@ -16,7 +16,6 @@ import java.util.Optional;
 public class ChimeController {
 
     private static final Logger log = LoggerFactory.getLogger(ChimeController.class);
-
     private final ChimeService chime;
 
     public ChimeController(ChimeService chime) {
@@ -27,9 +26,10 @@ public class ChimeController {
     public ResponseEntity<Map<String, Object>> play() {
         Optional<SoundSource> srcOpt = chime.resolveSource();
         if (srcOpt.isEmpty()) {
-            log.warn("Chime source not found in classpath: {}", chime.candidates());
+            var cands = chime.candidates(); // <— EINMAL holen
+            log.warn("Chime source not found in classpath: {}", cands);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "not_found", "candidates", chime.candidates()));
+                    .body(Map.of("error", "not_found", "candidates", cands));
         }
 
         SoundSource src = srcOpt.get();
@@ -40,3 +40,4 @@ public class ChimeController {
         return ResponseEntity.ok(Map.of("started", true, "source", src.classpath()));
     }
 }
+
