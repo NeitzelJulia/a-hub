@@ -6,6 +6,14 @@ type Signal =
     | { event: "candidate"; data: RTCIceCandidateInit }
     | { event: "bye" };
 
+/* ---------- Konstanten ---------- */
+const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+
+const AUDIO_CONSTRAINTS: MediaStreamConstraints = {
+    video: false,
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+};
+
 /* ---------- kleine Utils ---------- */
 function getIntercomText(ready: boolean, on: boolean): string {
     if (!ready) return "not started";
@@ -64,6 +72,8 @@ export default function DoorbellModal() {
     // Intercom UI
     const [intercomReady, setIntercomReady] = useState(false);
     const [micOn, setMicOn] = useState(false);
+
+    // abgeleitete UI-Flags
     const hasMicTrack = !!micTrackRef.current;
     const hasTx = !!micTxRef.current; // Transceiver vorbereitet (Fallback B)
     const canStartIntercom = !micOn && (intercomReady || hasTx || hasMicTrack);
@@ -73,7 +83,7 @@ export default function DoorbellModal() {
     }
     const WS_URL: string = import.meta.env.VITE_SIGNALING_WS_URL;
 
-    /* -------- PeerConnection + Handler (als function declarations) -------- */
+    /* -------- PeerConnection + Handler -------- */
     function closeModalAndCleanup() {
         setModalOpen(false);
         cleanup();
@@ -109,14 +119,17 @@ export default function DoorbellModal() {
     }
 
     function newPeer() {
-        const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
         wirePeerHandlers(pc);
         return pc;
     }
 
     function stopMic() {
-        try { micStreamRef.current?.getTracks().forEach((t) => t.stop()); }
-        catch (e) { console.warn("stopMic tracks failed:", e); }
+        try {
+            micStreamRef.current?.getTracks().forEach((t) => t.stop());
+        } catch (e) {
+            console.warn("stopMic tracks failed:", e);
+        }
         micStreamRef.current = null;
         micTrackRef.current = null;
         setMicOn(false);
@@ -133,10 +146,16 @@ export default function DoorbellModal() {
     }
 
     function cleanup() {
-        try { pcRef.current?.getSenders().forEach((s) => s.track?.stop()); }
-        catch (e) { console.warn("cleanup stop senders failed:", e); }
-        try { pcRef.current?.close(); }
-        catch (e) { console.warn("cleanup pc close failed:", e); }
+        try {
+            pcRef.current?.getSenders().forEach((s) => s.track?.stop());
+        } catch (e) {
+            console.warn("cleanup stop senders failed:", e);
+        }
+        try {
+            pcRef.current?.close();
+        } catch (e) {
+            console.warn("cleanup pc close failed:", e);
+        }
         pcRef.current = newPeer(); // bereit für nächsten Call
 
         resetMediaEls();
@@ -150,7 +169,7 @@ export default function DoorbellModal() {
         setErr(null);
     }
 
-    /* --------- WS Message Helpers (klein & flach) --------- */
+    /* --------- WS Message Helpers --------- */
     async function setRemoteOffer(pc: RTCPeerConnection, data: RTCSessionDescriptionInit) {
         try {
             await pc.setRemoteDescription(new RTCSessionDescription(data));
@@ -166,10 +185,7 @@ export default function DoorbellModal() {
     // A: Mic sofort holen & stumm anhängen (keine spätere Re-Negotiation)
     async function ensureIntercomPath(pc: RTCPeerConnection) {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: false,
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-            });
+            const stream = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS);
             micStreamRef.current = stream;
 
             const track = stream.getAudioTracks()[0];
@@ -203,14 +219,21 @@ export default function DoorbellModal() {
                     tx.direction = "sendrecv";
                 } catch (dirErr) {
                     console.warn("Setting transceiver.direction failed, try addTransceiver:", dirErr);
-                    try { tx = pc.addTransceiver("audio", { direction: "sendrecv" }); }
-                    catch (addErr) { console.error("addTransceiver fallback failed:", addErr); }
+                    try {
+                        tx = pc.addTransceiver("audio", { direction: "sendrecv" });
+                    } catch (addErr) {
+                        console.error("addTransceiver fallback failed:", addErr);
+                    }
                 }
             } else {
-                try { tx = pc.addTransceiver("audio", { direction: "sendrecv" }); }
-                catch (addErr) { console.error("addTransceiver failed:", addErr); }
+                try {
+                    tx = pc.addTransceiver("audio", { direction: "sendrecv" });
+                } catch (addErr) {
+                    console.error("addTransceiver failed:", addErr);
+                }
             }
             micTxRef.current = tx;
+            if (tx) setIntercomReady(true); // Pfad ist verhandelt, Track kommt ggf. später
             return !!tx;
         } catch (prepErr) {
             console.error("prepare transceiver fallback failed:", prepErr);
@@ -235,6 +258,12 @@ export default function DoorbellModal() {
     async function handleOffer(data: RTCSessionDescriptionInit) {
         const pc = pcRef.current;
         if (!pc) return;
+
+        // Guard: ignorier Offers in problematischen Zuständen (vereinfacht Glare-Handling)
+        if (pc.signalingState !== "stable" && pc.signalingState !== "have-remote-offer") {
+            console.warn("Ignoring offer in state:", pc.signalingState);
+            return;
+        }
 
         setModalOpen(true);
         setErr(null);
@@ -267,6 +296,9 @@ export default function DoorbellModal() {
         wsRef.current = ws;
         ws.onopen = () => setWsOpen(true);
         ws.onclose = () => setWsOpen(false);
+        ws.onerror = (e) => {
+            console.warn("WS error:", e);
+        };
 
         // PC
         const pc = newPeer();
@@ -298,13 +330,19 @@ export default function DoorbellModal() {
             }
         };
 
-        // Cleanup for mount/unmount (StrictMode-friendly)
+        // Cleanup for mount/unmount
         const beforeUnload = () => {
-            try { ws.close(); } catch (e) { console.debug("ws close on unload:", e); }
+            try {
+                ws.close();
+            } catch (e) {
+                console.debug("ws close on unload:", e);
+            }
             try {
                 pc.getSenders().forEach((s) => s.track?.stop());
                 pc.close();
-            } catch (e) { console.debug("pc close on unload:", e); }
+            } catch (e) {
+                console.debug("pc close on unload:", e);
+            }
         };
         window.addEventListener("beforeunload", beforeUnload);
         return () => {
@@ -312,6 +350,18 @@ export default function DoorbellModal() {
             beforeUnload();
         };
     }, [WS_URL]);
+
+    /* ---- Sync: Audio-Element Muted/Volume mit State ---- */
+    useEffect(() => {
+        const a = remoteAudioRef.current;
+        if (!a) return;
+        a.muted = !(soundEnabled && !remoteMuted);
+        a.volume = remoteVolume;
+
+        if (soundEnabled && !a.muted) {
+            a.play().catch((e) => console.debug("audio play retry failed:", e));
+        }
+    }, [soundEnabled, remoteMuted, remoteVolume]);
 
     /* ---------------- UI Actions ---------------- */
     // Empfang (Tür -> Hub)
@@ -364,10 +414,7 @@ export default function DoorbellModal() {
         }
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: false,
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-            });
+            const stream = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS);
             micStreamRef.current = stream;
 
             const track = stream.getAudioTracks()[0];
@@ -412,8 +459,14 @@ export default function DoorbellModal() {
         setMicOn(false);
     }
     function hangup() {
-        try { wsRef.current?.send(JSON.stringify({ event: "bye" })); }
-        catch (e) { console.debug("send bye failed:", e); }
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            try {
+                ws.send(JSON.stringify({ event: "bye" }));
+            } catch (e) {
+                console.debug("send bye failed:", e);
+            }
+        }
         closeModalAndCleanup();
     }
 
@@ -425,28 +478,52 @@ export default function DoorbellModal() {
         <div>
             {/* Debug/Status */}
             <div style={{ fontFamily: "monospace", fontSize: 12, lineHeight: 1.5 }}>
-                <div>WS: <strong>{wsOpen ? "connected" : "disconnected"}</strong></div>
-                <div>Signaling: <strong>{sigState}</strong></div>
-                <div>ICE: <strong>{iceConn}</strong></div>
-                <div>Modal: <strong>{modalOpen ? "open" : "closed"}</strong></div>
-                <div>Intercom: <strong>{intercomText}</strong></div>
+                <div>
+                    WS: <strong>{wsOpen ? "connected" : "disconnected"}</strong>
+                </div>
+                <div>
+                    Signaling: <strong>{sigState}</strong>
+                </div>
+                <div>
+                    ICE: <strong>{iceConn}</strong>
+                </div>
+                <div>
+                    Modal: <strong>{modalOpen ? "open" : "closed"}</strong>
+                </div>
+                <div>
+                    Intercom: <strong>{intercomText}</strong>
+                </div>
             </div>
 
             {err && <div style={{ color: "#f66", fontFamily: "monospace", fontSize: 12 }}>{err}</div>}
 
             {/* Modal */}
             {modalOpen && (
-                <div style={{
-                    position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)",
-                    display: "grid", placeItems: "center", zIndex: 9999
-                }}>
-                    <div style={{
-                        width: "min(92vw, 900px)", background: "#121212", color: "#eee",
-                        borderRadius: 12, padding: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.4)"
-                    }}>
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        background: "rgba(0,0,0,0.6)",
+                        display: "grid",
+                        placeItems: "center",
+                        zIndex: 9999,
+                    }}
+                >
+                    <div
+                        style={{
+                            width: "min(92vw, 900px)",
+                            background: "#121212",
+                            color: "#eee",
+                            borderRadius: 12,
+                            padding: 12,
+                            boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+                        }}
+                    >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                             <h3 style={{ margin: 0 }}>Klingel</h3>
-                            <button onClick={hangup} title="Auflegen">✖</button>
+                            <button onClick={hangup} title="Auflegen">
+                                ✖
+                            </button>
                         </div>
 
                         <div style={{ aspectRatio: "16 / 9", background: "#000", borderRadius: 8, overflow: "hidden" }}>
@@ -465,12 +542,17 @@ export default function DoorbellModal() {
                         {/* Controls */}
                         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
                             {/* Tür -> Hub */}
-                            <button onClick={enableSound} disabled={soundEnabled}>Ton einschalten</button>
+                            <button onClick={enableSound} disabled={soundEnabled}>
+                                Ton einschalten
+                            </button>
                             <button onClick={toggleRemoteMute}>{remoteMuted ? "Unmute" : "Mute"}</button>
                             <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                Vol <input
+                                Vol{" "}
+                                <input
                                     type="range"
-                                    min={0} max={1} step={0.05}
+                                    min={0}
+                                    max={1}
+                                    step={0.05}
                                     value={remoteVolume}
                                     onChange={(e) => changeRemoteVolume(parseFloat(e.target.value))}
                                     style={{ width: 140 }}
@@ -480,7 +562,7 @@ export default function DoorbellModal() {
                             {/* Hub -> Tür (Gegensprechen) */}
                             <div style={{ width: 1, height: 24, background: "#333", marginInline: 6 }} />
                             <button onClick={startIntercom} disabled={!canStartIntercom}>
-                                Gegensprechen starten
+                                Mikro einschalten
                             </button>
 
                             <button onClick={toggleMic} disabled={!hasMicTrack}>
@@ -498,9 +580,7 @@ export default function DoorbellModal() {
                                 Push-to-Talk
                             </button>
 
-                            <div style={{ marginLeft: "auto", fontFamily: "monospace", fontSize: 12 }}>
-                                ICE: {iceConn}
-                            </div>
+                            <div style={{ marginLeft: "auto", fontFamily: "monospace", fontSize: 12 }}>ICE: {iceConn}</div>
                         </div>
                     </div>
                 </div>
