@@ -25,13 +25,13 @@ public class ChimeService {
     private static final String WAV_NAME  = "doorbell.wav";
 
     public Optional<SoundSource> resolveSource() {
-        ClassPathResource mp3 = new ClassPathResource(SOUND_DIR + MP3_NAME);
-        if (mp3.exists()) {
-            return Optional.of(new SoundSource(SOUND_DIR + MP3_NAME, true));
+        String mp3 = SOUND_DIR + MP3_NAME;
+        if (existsOnClasspath(mp3)) {
+            return Optional.of(new SoundSource(mp3, true));
         }
-        ClassPathResource wav = new ClassPathResource(SOUND_DIR + WAV_NAME);
-        if (wav.exists()) {
-            return Optional.of(new SoundSource(SOUND_DIR + WAV_NAME, false));
+        String wav = SOUND_DIR + WAV_NAME;
+        if (existsOnClasspath(wav)) {
+            return Optional.of(new SoundSource(wav, false));
         }
         return Optional.empty();
     }
@@ -106,5 +106,9 @@ public class ChimeService {
              BufferedInputStream bin = new BufferedInputStream(in)) {
             new Player(bin).play();
         }
+    }
+
+    boolean existsOnClasspath(String cpPath) {
+        return new ClassPathResource(cpPath).exists();
     }
 }
