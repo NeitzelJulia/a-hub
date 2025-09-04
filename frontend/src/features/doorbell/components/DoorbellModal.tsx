@@ -14,6 +14,8 @@ const AUDIO_CONSTRAINTS: MediaStreamConstraints = {
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
 };
 
+const CHIME_ENDPOINT: string = (import.meta.env.VITE_CHIME_URL as string) ?? "/api/chime/play";
+
 /* ---------- kleine Utils ---------- */
 function getIntercomText(ready: boolean, on: boolean): string {
     if (!ready) return "not started";
@@ -58,6 +60,9 @@ export default function DoorbellModal() {
     const micTxRef = useRef<RTCRtpTransceiver | null>(null);
     const micStreamRef = useRef<MediaStream | null>(null);
     const micTrackRef = useRef<MediaStreamTrack | null>(null);
+
+    // Chime: pro Call nur einmal triggern
+    const chimeTriggeredRef = useRef<boolean>(false);
 
     // State
     const [wsOpen, setWsOpen] = useState(false);
@@ -162,6 +167,8 @@ export default function DoorbellModal() {
         stopMic();
         micTxRef.current = null;
 
+        chimeTriggeredRef.current = false;
+
         setIntercomReady(false);
         setSoundEnabled(false);
         setRemoteMuted(false);
@@ -179,6 +186,21 @@ export default function DoorbellModal() {
             console.error("setRemoteDescription(offer) failed:", ex);
             setErr(`Offer konnte nicht gesetzt werden: ${m}`);
             return false;
+        }
+    }
+
+    // Chime nur einmal pro Call triggern
+    async function triggerChimeOnce() {
+        if (chimeTriggeredRef.current) return;
+        chimeTriggeredRef.current = true;
+        try {
+            const resp = await fetch(CHIME_ENDPOINT, { method: "POST" });
+            if (!resp.ok) {
+                const text = await resp.text().catch(() => "");
+                console.warn("Chime trigger failed:", resp.status, text);
+            }
+        } catch (e) {
+            console.warn("Chime trigger error:", e);
         }
     }
 
@@ -264,6 +286,8 @@ export default function DoorbellModal() {
             console.warn("Ignoring offer in state:", pc.signalingState);
             return;
         }
+
+        void triggerChimeOnce();
 
         setModalOpen(true);
         setErr(null);
