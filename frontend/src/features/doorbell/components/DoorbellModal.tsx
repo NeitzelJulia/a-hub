@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
+import { Modal, ModalHeader } from "../../../shared/components/ui/Modal.tsx";
+import "./DoorbellModal.css";
 
 type Signal =
     | { event: "offer"; data: RTCSessionDescriptionInit }
@@ -13,6 +15,8 @@ const AUDIO_CONSTRAINTS: MediaStreamConstraints = {
     video: false,
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
 };
+
+const CHIME_ENDPOINT: string = (import.meta.env.VITE_CHIME_URL as string) ?? "/api/chime/play";
 
 /* ---------- kleine Utils ---------- */
 function getIntercomText(ready: boolean, on: boolean): string {
@@ -58,6 +62,9 @@ export default function DoorbellModal() {
     const micTxRef = useRef<RTCRtpTransceiver | null>(null);
     const micStreamRef = useRef<MediaStream | null>(null);
     const micTrackRef = useRef<MediaStreamTrack | null>(null);
+
+    // Chime: pro Call nur einmal triggern
+    const chimeTriggeredRef = useRef<boolean>(false);
 
     // State
     const [wsOpen, setWsOpen] = useState(false);
@@ -162,6 +169,8 @@ export default function DoorbellModal() {
         stopMic();
         micTxRef.current = null;
 
+        chimeTriggeredRef.current = false;
+
         setIntercomReady(false);
         setSoundEnabled(false);
         setRemoteMuted(false);
@@ -179,6 +188,21 @@ export default function DoorbellModal() {
             console.error("setRemoteDescription(offer) failed:", ex);
             setErr(`Offer konnte nicht gesetzt werden: ${m}`);
             return false;
+        }
+    }
+
+    // Chime nur einmal pro Call triggern
+    async function triggerChimeOnce() {
+        if (chimeTriggeredRef.current) return;
+        chimeTriggeredRef.current = true;
+        try {
+            const resp = await fetch(CHIME_ENDPOINT, { method: "POST" });
+            if (!resp.ok) {
+                const text = await resp.text().catch(() => "");
+                console.warn("Chime trigger failed:", resp.status, text);
+            }
+        } catch (e) {
+            console.warn("Chime trigger error:", e);
         }
     }
 
@@ -264,6 +288,8 @@ export default function DoorbellModal() {
             console.warn("Ignoring offer in state:", pc.signalingState);
             return;
         }
+
+        void triggerChimeOnce();
 
         setModalOpen(true);
         setErr(null);
@@ -497,94 +523,68 @@ export default function DoorbellModal() {
 
             {err && <div style={{ color: "#f66", fontFamily: "monospace", fontSize: 12 }}>{err}</div>}
 
-            {/* Modal */}
-            {modalOpen && (
-                <div
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        background: "rgba(0,0,0,0.6)",
-                        display: "grid",
-                        placeItems: "center",
-                        zIndex: 9999,
-                    }}
-                >
-                    <div
-                        style={{
-                            width: "min(92vw, 900px)",
-                            background: "#121212",
-                            color: "#eee",
-                            borderRadius: 12,
-                            padding: 12,
-                            boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
-                        }}
-                    >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                            <h3 style={{ margin: 0 }}>Klingel</h3>
-                            <button onClick={hangup} title="Auflegen">
-                                ✖
-                            </button>
-                        </div>
+            <Modal open={modalOpen} onClose={hangup} titleId="doorbell-title">
+                <ModalHeader title="Klingel" titleId="doorbell-title" onClose={hangup} />
 
-                        <div style={{ aspectRatio: "16 / 9", background: "#000", borderRadius: 8, overflow: "hidden" }}>
-                            <video
-                                ref={remoteVideoRef}
-                                autoPlay
-                                playsInline
-                                muted
-                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                            />
-                        </div>
-
-                        {/* Unsichtbares Audio für Tür->Hub Ton */}
-                        <audio ref={remoteAudioRef} autoPlay muted />
-
-                        {/* Controls */}
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
-                            {/* Tür -> Hub */}
-                            <button onClick={enableSound} disabled={soundEnabled}>
-                                Ton einschalten
-                            </button>
-                            <button onClick={toggleRemoteMute}>{remoteMuted ? "Unmute" : "Mute"}</button>
-                            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                Vol{" "}
-                                <input
-                                    type="range"
-                                    min={0}
-                                    max={1}
-                                    step={0.05}
-                                    value={remoteVolume}
-                                    onChange={(e) => changeRemoteVolume(parseFloat(e.target.value))}
-                                    style={{ width: 140 }}
-                                />
-                            </label>
-
-                            {/* Hub -> Tür (Gegensprechen) */}
-                            <div style={{ width: 1, height: 24, background: "#333", marginInline: 6 }} />
-                            <button onClick={startIntercom} disabled={!canStartIntercom}>
-                                Mikro einschalten
-                            </button>
-
-                            <button onClick={toggleMic} disabled={!hasMicTrack}>
-                                {micOn ? "Mic Off" : "Mic On"}
-                            </button>
-
-                            <button
-                                onMouseDown={pttDown}
-                                onMouseUp={pttUp}
-                                onTouchStart={pttDown}
-                                onTouchEnd={pttUp}
-                                disabled={!hasMicTrack}
-                                title="Gedrückt halten zum Sprechen"
-                            >
-                                Push-to-Talk
-                            </button>
-
-                            <div style={{ marginLeft: "auto", fontFamily: "monospace", fontSize: 12 }}>ICE: {iceConn}</div>
-                        </div>
+                <div>
+                    <div className="doorbell-video-container">
+                        <video
+                            ref={remoteVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="doorbell-video"
+                        />
                     </div>
+
+                    <audio ref={remoteAudioRef} autoPlay muted />
+
+                    <div className="doorbell-controls">
+                    <button className="btn btn-secondary" onClick={enableSound} disabled={soundEnabled}>
+                        Ton einschalten
+                    </button>
+
+                    <button className="btn btn-secondary" onClick={toggleRemoteMute}>
+                        {remoteMuted ? "Unmute" : "Mute"}
+                    </button>
+
+                    <label className="doorbell-volume">
+                        Vol <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            value={remoteVolume}
+                            onChange={(e) => changeRemoteVolume(parseFloat(e.target.value))}
+                        />
+                    </label>
+
+                    <div className="doorbell-divider" />
+
+                    <button className="btn btn-primary" onClick={startIntercom} disabled={!canStartIntercom}>
+                        Mikro einschalten
+                    </button>
+
+                    <button className="btn btn-dark" onClick={toggleMic} disabled={!micTrackRef.current}>
+                        {micOn ? "Mic Off" : "Mic On"}
+                    </button>
+
+                    <button
+                        className="btn btn-secondary"
+                        onMouseDown={pttDown}
+                        onMouseUp={pttUp}
+                        onTouchStart={pttDown}
+                        onTouchEnd={pttUp}
+                        disabled={!micTrackRef.current}
+                        title="Gedrückt halten zum Sprechen"
+                    >
+                        Push-to-Talk
+                    </button>
+
+                    <div className="doorbell-ice">ICE: {iceConn}</div>
                 </div>
-            )}
+                </div>
+            </Modal>
         </div>
     );
 }
