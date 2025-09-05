@@ -41,26 +41,28 @@ public class ChimeService {
     }
 
     public void playAsync(SoundSource src) {
-        Thread t = new Thread(() -> {
-            try {
-                if (src.mp3()) {
-                    playMp3FromClasspath(src.classpath());
-                } else {
-                    playWavFromClasspath(src.classpath());
-                }
-                log.debug("Chime playback finished");
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                log.warn("Chime playback interrupted", ie);
-            } catch (java.io.IOException
-                     | JavaLayerException
-                     | UnsupportedAudioFileException
-                     | LineUnavailableException e) {
-                log.error("Chime playback failed", e);
-            }
-        }, "chime-player");
+        Thread t = new Thread(() -> runPlayback(src), "chime-player");
         t.setDaemon(true);
         t.start();
+    }
+
+    void runPlayback(SoundSource src) {
+        try {
+            if (src.mp3()) {
+                playMp3FromClasspath(src.classpath());
+            } else {
+                playWavFromClasspath(src.classpath());
+            }
+            log.debug("Chime playback finished");
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            log.warn("Chime playback interrupted", ie);
+        } catch (java.io.IOException
+                 | JavaLayerException
+                 | UnsupportedAudioFileException
+                 | LineUnavailableException e) {
+            log.error("Chime playback failed", e);
+        }
     }
 
     /* ---------------- WAV (Java Sound) ---------------- */
