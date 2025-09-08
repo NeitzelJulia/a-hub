@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo } from "react";
 import { Modal, ModalHeader } from "../../../shared/components/ui/Modal.tsx";
 import { getIntercomText, attachStream, clearStream } from "../utils/media";
 import { ICE_SERVERS, AUDIO_CONSTRAINTS, CHIME_ENDPOINT } from "../config";
-import { handleWsMessage } from "../signaling";
 import { useRemoteAudioSync } from "../hooks/useRemoteAudioSync";
+import { useSignalingBootstrap } from "../hooks/useSignalingBootstrap";
 import "./DoorbellModal.css";
 import DoorbellStatus from "./DoorbellStatus.tsx";
 import DoorbellControls from "./DoorbellControls.tsx";
@@ -134,6 +134,14 @@ export default function DoorbellModal() {
         setRemoteVolume(1);
         setErr(null);
     }
+
+    useSignalingBootstrap(WS_URL, wsRef, pcRef, {
+        setWsOpen,
+        newPeer,
+        onOffer: handleOffer,
+        onCandidate: handleCandidate,
+        onBye: handleBye,
+    });
 
     /* --------- WS Message Helpers --------- */
     async function setRemoteOffer(pc: RTCPeerConnection, data: RTCSessionDescriptionInit) {
@@ -271,51 +279,6 @@ export default function DoorbellModal() {
     function handleBye() {
         closeModalAndCleanup();
     }
-
-    /* ------------------- Bootstrap: WS + PC ------------------- */
-    useEffect(() => {
-        // WS
-        const ws = new WebSocket(WS_URL);
-        wsRef.current = ws;
-        ws.onopen = () => setWsOpen(true);
-        ws.onclose = () => setWsOpen(false);
-        ws.onerror = (e) => {
-            console.warn("WS error:", e);
-        };
-
-        // PC
-        const pc = newPeer();
-        pcRef.current = pc;
-
-        // WS-Message-Handler
-        ws.onmessage = (e) => {
-            handleWsMessage(e.data, {
-                onOffer: handleOffer,
-                onCandidate: handleCandidate,
-                onBye: handleBye,
-            });
-        };
-
-        // Cleanup for mount/unmount
-        const beforeUnload = () => {
-            try {
-                ws.close();
-            } catch (e) {
-                console.debug("ws close on unload:", e);
-            }
-            try {
-                pc.getSenders().forEach((s) => s.track?.stop());
-                pc.close();
-            } catch (e) {
-                console.debug("pc close on unload:", e);
-            }
-        };
-        window.addEventListener("beforeunload", beforeUnload);
-        return () => {
-            window.removeEventListener("beforeunload", beforeUnload);
-            beforeUnload();
-        };
-    }, [WS_URL]);
 
     useRemoteAudioSync(remoteAudioRef, soundEnabled, remoteMuted, remoteVolume);
 
