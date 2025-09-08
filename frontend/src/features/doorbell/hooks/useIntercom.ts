@@ -1,10 +1,9 @@
-import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 
 export type IntercomApi = {
     intercomReady: boolean;
     micOn: boolean;
     hasMicTrack: boolean;
-    canStartIntercom: boolean;
 
     prepareForCall: () => Promise<void>;   // vor dem Answer einmal aufrufen
     startIntercom: () => Promise<void>;
@@ -29,11 +28,6 @@ export function useIntercom({ pcRef, audioConstraints, onError }: Args): Interco
     const [micOn, setMicOn] = useState(false);
 
     const hasMicTrack = !!micTrackRef.current;
-    const hasTx = !!micTxRef.current;
-    const canStartIntercom = useMemo(
-        () => !micOn && (intercomReady || hasTx || hasMicTrack),
-        [micOn, intercomReady, hasTx, hasMicTrack]
-    );
 
     const reset = useCallback(() => {
         try {
@@ -50,7 +44,8 @@ export function useIntercom({ pcRef, audioConstraints, onError }: Args): Interco
 
     const prepareTransceiverFallback = useCallback((pc: RTCPeerConnection) => {
         try {
-            let tx = pc.getTransceivers().find((t) => t.receiver?.track?.kind === "audio") || null;
+            let tx =
+                pc.getTransceivers().find((t) => t.receiver?.track?.kind === "audio") || null;
             if (tx) {
                 try {
                     tx.direction = "sendrecv";
@@ -167,7 +162,6 @@ export function useIntercom({ pcRef, audioConstraints, onError }: Args): Interco
         intercomReady,
         micOn,
         hasMicTrack,
-        canStartIntercom,
         prepareForCall,
         startIntercom,
         toggleMic,
