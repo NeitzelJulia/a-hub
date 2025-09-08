@@ -5,6 +5,7 @@ import { ICE_SERVERS, AUDIO_CONSTRAINTS, CHIME_ENDPOINT } from "../config";
 import { useRemoteAudioSync } from "../hooks/useRemoteAudioSync";
 import { useSignalingBootstrap } from "../hooks/useSignalingBootstrap";
 import { useIntercom } from "../hooks/useIntercom";
+import { makeNewPeer } from "../rtc/peer";
 import "./DoorbellModal.css";
 import DoorbellStatus from "./DoorbellStatus.tsx";
 import DoorbellControls from "./DoorbellControls.tsx";
@@ -34,47 +35,9 @@ export default function DoorbellModal() {
     }
     const WS_URL: string = import.meta.env.VITE_SIGNALING_WS_URL;
 
-    /* -------- PeerConnection + Handler -------- */
     function closeModalAndCleanup() {
         setModalOpen(false);
         cleanup();
-    }
-
-    function wirePeerHandlers(pc: RTCPeerConnection) {
-        pc.onicecandidate = (ev) => {
-            if (ev.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(
-                    JSON.stringify({ event: "candidate", data: ev.candidate.toJSON() })
-                );
-            }
-        };
-        pc.onsignalingstatechange = () => setSigState(pc.signalingState);
-        pc.oniceconnectionstatechange = () => {
-            const s = pc.iceConnectionState;
-            setIceConn(s);
-            if (s === "failed" || s === "disconnected" || s === "closed") {
-                closeModalAndCleanup();
-            }
-        };
-        pc.ontrack = (ev) => {
-            const stream = ev.streams[0];
-            const v = remoteVideoRef.current;
-            const a = remoteAudioRef.current;
-            if (v) {
-                attachStream(v, stream);
-                v.muted = true; // Autoplay-safe
-                v.play().catch((e) => console.debug("remote video autoplay deferred:", e));
-            }
-            if (a) {
-                attachStream(a, stream); // bleibt gemutet bis "Ton einschalten"
-            }
-        };
-    }
-
-    function newPeer() {
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-        wirePeerHandlers(pc);
-        return pc;
     }
 
     function resetMediaEls() {
@@ -101,6 +64,18 @@ export default function DoorbellModal() {
         reset: resetIntercom,
     } = useIntercom({ pcRef, audioConstraints: AUDIO_CONSTRAINTS, onError: setErr });
 
+    const newPeer = makeNewPeer({
+        wsRef,
+        iceServers: ICE_SERVERS,
+        onSig: setSigState,
+        onIce: (s) => { setIceConn(s); if (["failed","disconnected","closed"].includes(s)) closeModalAndCleanup(); },
+        onStream: (stream) => {
+            const v = remoteVideoRef.current, a = remoteAudioRef.current;
+            if (v) { attachStream(v, stream); v.muted = true; v.play().catch(()=>{}); }
+            if (a) attachStream(a, stream);
+        },
+    });
+
     /* --------- WS Message Helpers --------- */
     async function setRemoteOffer(pc: RTCPeerConnection, data: RTCSessionDescriptionInit) {
         try {
@@ -114,7 +89,6 @@ export default function DoorbellModal() {
         }
     }
 
-    // Chime nur einmal pro Call triggern
     async function triggerChimeOnce() {
         if (chimeTriggeredRef.current) return;
         chimeTriggeredRef.current = true;
@@ -147,7 +121,6 @@ export default function DoorbellModal() {
         const pc = pcRef.current;
         if (!pc) return;
 
-        // Guard: ignorier Offers in problematischen Zuständen (vereinfacht Glare-Handling)
         if (pc.signalingState !== "stable" && pc.signalingState !== "have-remote-offer") {
             console.warn("Ignoring offer in state:", pc.signalingState);
             return;
@@ -161,7 +134,7 @@ export default function DoorbellModal() {
         const okRemote = await setRemoteOffer(pc, data);
         if (!okRemote) return;
 
-        await prepareForCall();      // statt ensureIntercomPath
+        await prepareForCall();
         await sendAnswer(pc, wsRef.current);
     }
 
@@ -215,7 +188,6 @@ export default function DoorbellModal() {
     }
 
     /* ---------------- UI Actions ---------------- */
-    // Empfang (Tür -> Hub)
     async function enableSound() {
         const a = remoteAudioRef.current;
         if (!a) return;
@@ -255,27 +227,18 @@ export default function DoorbellModal() {
         closeModalAndCleanup();
     }
 
-    // Anzeige-Strings
     const intercomText = useMemo(
         () => getIntercomText(intercomReady, micOn),
         [intercomReady, micOn]
     );
 
-    /* ---------------- Render ---------------- */
     return (
         <div>
             <Modal open={modalOpen} onClose={hangup} titleId="doorbell-title">
                 <ModalHeader title="Klingel" titleId="doorbell-title" onClose={hangup} />
-
                 <div>
                     <div className="doorbell-video-container">
-                        <video
-                            ref={remoteVideoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            className="doorbell-video"
-                        />
+                        <video ref={remoteVideoRef} autoPlay playsInline muted className="doorbell-video" />
                     </div>
 
                     <audio ref={remoteAudioRef} autoPlay muted />
