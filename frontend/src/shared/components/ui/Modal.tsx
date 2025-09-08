@@ -96,7 +96,6 @@ export function ModalHeader(props: Readonly<{
             <h3 id={titleId}>{title}</h3>
             <button
                 type="button"
-                className="btn btn-danger btn-sm"
                 onClick={onClose}
                 aria-label="Dialog schließen"
             >

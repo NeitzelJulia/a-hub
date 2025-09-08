@@ -10,33 +10,3 @@
     height: 100%;
     object-fit: cover;
 }
-
-.doorbell-controls {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    margin-top: 10px;
-    flex-wrap: wrap;
-}
-
-.doorbell-volume {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-.doorbell-volume input {
-    width: 140px;
-}
-
-.doorbell-divider {
-    width: 1px;
-    height: 24px;
-    background: #333;
-    margin-inline: 6px;
-}
-
-.doorbell-ice {
-    margin-left: auto;
-    font-family: monospace;
-    font-size: 12px;
-}
