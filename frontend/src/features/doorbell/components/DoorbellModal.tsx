@@ -16,8 +16,6 @@ export default function DoorbellModal() {
     const pcRef = useRef<RTCPeerConnection | null>(null);
     const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
     const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
-
-    // Chime: pro Call nur einmal triggern
     const chimeTriggeredRef = useRef<boolean>(false);
 
     // State
@@ -50,7 +48,7 @@ export default function DoorbellModal() {
         }
     }
 
-    /* -------- Intercom Hook -------- */
+    // Intercom
     const {
         intercomReady,
         micOn,
@@ -64,19 +62,30 @@ export default function DoorbellModal() {
         reset: resetIntercom,
     } = useIntercom({ pcRef, audioConstraints: AUDIO_CONSTRAINTS, onError: setErr });
 
+    // Peer-Fabrik
     const newPeer = makeNewPeer({
         wsRef,
         iceServers: ICE_SERVERS,
         onSig: setSigState,
-        onIce: (s) => { setIceConn(s); if (["failed","disconnected","closed"].includes(s)) closeModalAndCleanup(); },
+        onIce: (s) => {
+            setIceConn(s);
+            if (s === "failed" || s === "disconnected" || s === "closed") {
+                closeModalAndCleanup();
+            }
+        },
         onStream: (stream) => {
-            const v = remoteVideoRef.current, a = remoteAudioRef.current;
-            if (v) { attachStream(v, stream); v.muted = true; v.play().catch(()=>{}); }
+            const v = remoteVideoRef.current;
+            const a = remoteAudioRef.current;
+            if (v) {
+                attachStream(v, stream);
+                v.muted = true;
+                v.play().catch((e) => console.debug("remote video autoplay deferred:", e));
+            }
             if (a) attachStream(a, stream);
         },
     });
 
-    /* --------- WS Message Helpers --------- */
+    // Signaling helpers
     async function setRemoteOffer(pc: RTCPeerConnection, data: RTCSessionDescriptionInit) {
         try {
             await pc.setRemoteDescription(new RTCSessionDescription(data));
@@ -121,15 +130,17 @@ export default function DoorbellModal() {
         const pc = pcRef.current;
         if (!pc) return;
 
-        if (pc.signalingState !== "stable" && pc.signalingState !== "have-remote-offer") {
-            console.warn("Ignoring offer in state:", pc.signalingState);
+        const state = pc.signalingState;
+        const okState = state === "stable" || state === "have-remote-offer";
+        if (!okState) {
+            console.warn("Ignoring offer in state:", state);
             return;
         }
 
-        void triggerChimeOnce();
-
+        // UI sofort; Chime fire-and-forget
         setModalOpen(true);
         setErr(null);
+        void triggerChimeOnce();
 
         const okRemote = await setRemoteOffer(pc, data);
         if (!okRemote) return;
@@ -152,7 +163,7 @@ export default function DoorbellModal() {
         closeModalAndCleanup();
     }
 
-    /* ------------------- Bootstrap: WS + PC ------------------- */
+    // Bootstrap WS + Peer
     useSignalingBootstrap(WS_URL, wsRef, pcRef, {
         setWsOpen,
         newPeer,
@@ -161,9 +172,10 @@ export default function DoorbellModal() {
         onBye: handleBye,
     });
 
+    // Audio-Ref syncen
     useRemoteAudioSync(remoteAudioRef, soundEnabled, remoteMuted, remoteVolume);
 
-    /* ---------------- Cleanup Wrapper ---------------- */
+    // Cleanup Wrapper
     function cleanup() {
         try {
             pcRef.current?.getSenders().forEach((s) => s.track?.stop());
@@ -175,8 +187,8 @@ export default function DoorbellModal() {
         } catch (e) {
             console.warn("cleanup pc close failed:", e);
         }
-        pcRef.current = newPeer(); // bereit für nächsten Call
 
+        pcRef.current = newPeer(); // bereit für nächsten Call
         resetMediaEls();
         resetIntercom();
         chimeTriggeredRef.current = false;
@@ -187,7 +199,7 @@ export default function DoorbellModal() {
         setErr(null);
     }
 
-    /* ---------------- UI Actions ---------------- */
+    // UI-Actions
     async function enableSound() {
         const a = remoteAudioRef.current;
         if (!a) return;
@@ -238,7 +250,13 @@ export default function DoorbellModal() {
                 <ModalHeader title="Klingel" titleId="doorbell-title" onClose={hangup} />
                 <div>
                     <div className="doorbell-video-container">
-                        <video ref={remoteVideoRef} autoPlay playsInline muted className="doorbell-video" />
+                        <video
+                            ref={remoteVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="doorbell-video"
+                        />
                     </div>
 
                     <audio ref={remoteAudioRef} autoPlay muted />
