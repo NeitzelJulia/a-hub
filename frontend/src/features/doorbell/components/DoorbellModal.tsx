@@ -6,6 +6,7 @@ import { useRemoteAudioSync } from "../hooks/useRemoteAudioSync";
 import { useSignalingBootstrap } from "../hooks/useSignalingBootstrap";
 import { useIntercom } from "../hooks/useIntercom";
 import { makeNewPeer } from "../rtc/peer";
+import { setRemoteOfferSafe, sendAnswerSafe } from "../rtc/sdp";
 import "./DoorbellModal.css";
 import DoorbellStatus from "./DoorbellStatus.tsx";
 import DoorbellControls from "./DoorbellControls.tsx";
@@ -86,18 +87,6 @@ export default function DoorbellModal() {
     });
 
     // Signaling helpers
-    async function setRemoteOffer(pc: RTCPeerConnection, data: RTCSessionDescriptionInit) {
-        try {
-            await pc.setRemoteDescription(new RTCSessionDescription(data));
-            return true;
-        } catch (ex) {
-            const m = ex instanceof Error ? ex.message : String(ex);
-            console.error("setRemoteDescription(offer) failed:", ex);
-            setErr(`Offer konnte nicht gesetzt werden: ${m}`);
-            return false;
-        }
-    }
-
     async function triggerChimeOnce() {
         if (chimeTriggeredRef.current) return;
         chimeTriggeredRef.current = true;
@@ -109,20 +98,6 @@ export default function DoorbellModal() {
             }
         } catch (e) {
             console.warn("Chime trigger error:", e);
-        }
-    }
-
-    async function sendAnswer(pc: RTCPeerConnection, ws: WebSocket | null) {
-        try {
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            ws?.send(JSON.stringify({ event: "answer", data: answer }));
-            return true;
-        } catch (ex) {
-            const m = ex instanceof Error ? ex.message : String(ex);
-            console.error("Answering failed:", ex);
-            setErr(`Answer fehlgeschlagen: ${m}`);
-            return false;
         }
     }
 
@@ -142,11 +117,18 @@ export default function DoorbellModal() {
         setErr(null);
         void triggerChimeOnce();
 
-        const okRemote = await setRemoteOffer(pc, data);
-        if (!okRemote) return;
+        const resOffer = await setRemoteOfferSafe(pc, data);
+        if (!resOffer.ok) {
+            setErr(`Offer konnte nicht gesetzt werden: ${resOffer.error}`);
+            return;
+        }
 
         await prepareForCall();
-        await sendAnswer(pc, wsRef.current);
+
+        const resAns = await sendAnswerSafe(pc, wsRef.current);
+        if (!resAns.ok) {
+            setErr(`Answer fehlgeschlagen: ${resAns.error}`);
+        }
     }
 
     async function handleCandidate(data: RTCIceCandidateInit) {
