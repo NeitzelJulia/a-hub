@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { handleWsMessage } from "../signaling";
 
 export type SignalingHandlers = Readonly<{
@@ -16,61 +16,70 @@ export function useSignalingBootstrap(
     pcRef: RefObject<RTCPeerConnection | null>,
     h: SignalingHandlers
 ) {
+    const handlersRef = useRef<SignalingHandlers | null>(null);
+    handlersRef.current = h;
+
     useEffect(() => {
         // 1) PeerConnection zuerst
         const pc = h.newPeer();
         pcRef.current = pc;
 
-        // 2) WebSocket
+        // 2) WebSocket verbinden
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
-        let disposed = false;
-
-        // 3) Handler
+        // 3) Events genau einmal registrieren; Handler kommen aus handlersRef
         ws.onmessage = (e) => {
+            const hr = handlersRef.current;
+            if (!hr) return;
             handleWsMessage(e.data, {
-                onOffer: h.onOffer,
-                onCandidate: h.onCandidate,
-                onBye: h.onBye,
+                onOffer: hr.onOffer,
+                onCandidate: hr.onCandidate,
+                onBye: hr.onBye,
             });
         };
-        ws.onopen = () => h.setWsOpen(true);
-        ws.onclose = () => h.setWsOpen(false);
+
+        ws.onopen = () => handlersRef.current?.setWsOpen(true);
+        ws.onclose = () => handlersRef.current?.setWsOpen(false);
         ws.onerror = (e) => {
-            if (!disposed && ws.readyState !== WebSocket.CLOSING && ws.readyState !== WebSocket.CLOSED) {
+            if (ws.readyState !== WebSocket.CLOSING && ws.readyState !== WebSocket.CLOSED) {
                 console.warn("[WS] error:", e);
             }
         };
 
-        // Cleanup (nur aus dem Effect heraus)
+        // Cleanup
         return () => {
-            disposed = true;
+            // Events lösen
+            ws.onopen = null;
+            ws.onclose = null;
+            ws.onerror = null;
+            ws.onmessage = null;
 
-            // Handler lösen
-            ws.onopen = ws.onclose = ws.onerror = ws.onmessage = null;
-
-            // Tracks stoppen
-            for (const s of pc.getSenders()) {
-                try { s.track?.stop(); } catch (err) { console.debug("stop sender track failed:", err); }
-            }
-
-            // PC schließen
+            // PC sauber schließen
             try {
-                if (pc.connectionState !== "closed") pc.close();
+                pc.getSenders().forEach((s) => s.track?.stop());
             } catch (err) {
-                console.debug("pc.close() failed:", err);
+                console.warn("cleanup stop senders failed:", err);
+            }
+            if (pc.connectionState !== "closed") {
+                try {
+                    pc.close();
+                } catch (err) {
+                    console.warn("cleanup pc close failed:", err);
+                }
             }
 
-            // WICHTIG: NICHT im CONNECTING-State schließen (vermeidet Konsolen-Lärm)
+            // WS nur schließen, wenn sinnvoll
             if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CLOSING) {
-                try { ws.close(); } catch (err) { console.debug("ws.close() failed:", err); }
+                try {
+                    ws.close();
+                } catch (err) {
+                    console.warn("cleanup ws close failed:", err);
+                }
             }
 
-            // Refs leeren & UI-Flag zurücksetzen
             wsRef.current = null;
             pcRef.current = null;
-            h.setWsOpen(false);
         };
     }, [wsUrl]);
 }
