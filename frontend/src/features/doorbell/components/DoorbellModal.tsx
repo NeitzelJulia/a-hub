@@ -4,6 +4,7 @@ import { getIntercomText, attachStream, clearStream } from "../utils/media";
 import { ICE_SERVERS, AUDIO_CONSTRAINTS, CHIME_ENDPOINT } from "../config";
 import "./DoorbellModal.css";
 import DoorbellStatus from "./DoorbellStatus.tsx";
+import DoorbellControls from "./DoorbellControls.tsx";
 
 type Signal =
     | { event: "offer"; data: RTCSessionDescriptionInit }
@@ -478,50 +479,22 @@ export default function DoorbellModal() {
 
                     <audio ref={remoteAudioRef} autoPlay muted />
 
-                    <div className="doorbell-controls">
-                        <button className="btn btn-secondary" onClick={enableSound} disabled={soundEnabled}>
-                            Ton einschalten
-                        </button>
-
-                        <button className="btn btn-secondary" onClick={toggleRemoteMute}>
-                            {remoteMuted ? "Unmute" : "Mute"}
-                        </button>
-
-                        <label className="doorbell-volume">
-                            Vol <input
-                                type="range"
-                                min={0}
-                                max={1}
-                                step={0.05}
-                                value={remoteVolume}
-                                onChange={(e) => changeRemoteVolume(parseFloat(e.target.value))}
-                            />
-                        </label>
-
-                        <div className="doorbell-divider" />
-
-                        <button className="btn btn-primary" onClick={startIntercom} disabled={!canStartIntercom}>
-                            Mikro einschalten
-                        </button>
-
-                        <button className="btn btn-dark" onClick={toggleMic} disabled={!micTrackRef.current}>
-                            {micOn ? "Mic Off" : "Mic On"}
-                        </button>
-
-                        <button
-                            className="btn btn-secondary"
-                            onMouseDown={pttDown}
-                            onMouseUp={pttUp}
-                            onTouchStart={pttDown}
-                            onTouchEnd={pttUp}
-                            disabled={!micTrackRef.current}
-                            title="Gedrückt halten zum Sprechen"
-                        >
-                            Push-to-Talk
-                        </button>
-
-                        <div className="doorbell-ice">ICE: {iceConn}</div>
-                    </div>
+                    <DoorbellControls
+                        soundEnabled={soundEnabled}
+                        remoteMuted={remoteMuted}
+                        remoteVolume={remoteVolume}
+                        canStartIntercom={canStartIntercom}
+                        micOn={micOn}
+                        hasMicTrack={!!micTrackRef.current}
+                        iceConn={iceConn}
+                        onEnableSound={enableSound}
+                        onToggleRemoteMute={toggleRemoteMute}
+                        onChangeRemoteVolume={changeRemoteVolume}
+                        onStartIntercom={startIntercom}
+                        onToggleMic={toggleMic}
+                        onPttDown={pttDown}
+                        onPttUp={pttUp}
+                    />
                     <DoorbellStatus
                         wsOpen={wsOpen}
                         sigState={sigState}
