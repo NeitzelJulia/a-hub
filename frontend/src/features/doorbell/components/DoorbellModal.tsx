@@ -26,7 +26,7 @@ export default function DoorbellModal() {
     // State
     const [wsOpen, setWsOpen] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
-    const [audible, setAudible] = useState(false);         // <-- neu: ersetzt soundEnabled + remoteMuted
+    const [audible, setAudible] = useState(false);
     const [remoteVolume, setRemoteVolume] = useState(1);
     const [sigState, setSigState] = useState<RTCSignalingState>("stable");
     const [iceConn, setIceConn] = useState<RTCIceConnectionState>("new");
