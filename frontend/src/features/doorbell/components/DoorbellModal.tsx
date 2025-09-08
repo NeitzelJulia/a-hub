@@ -1,4 +1,3 @@
-// src/features/doorbell/components/DoorbellModal.tsx
 import { useRef, useState, useMemo, useCallback, useEffect } from "react";
 import { Modal, ModalHeader } from "../../../shared/components/ui/Modal.tsx";
 import { getIntercomText, attachStream, clearStream } from "../utils/media";
@@ -27,8 +26,7 @@ export default function DoorbellModal() {
     // State
     const [wsOpen, setWsOpen] = useState(false);
     const [modalOpen, setModalOpen] = useState(false);
-    const [soundEnabled, setSoundEnabled] = useState(false);
-    const [remoteMuted, setRemoteMuted] = useState(false);
+    const [audible, setAudible] = useState(false);         // <-- neu: ersetzt soundEnabled + remoteMuted
     const [remoteVolume, setRemoteVolume] = useState(1);
     const [sigState, setSigState] = useState<RTCSignalingState>("stable");
     const [iceConn, setIceConn] = useState<RTCIceConnectionState>("new");
@@ -60,7 +58,6 @@ export default function DoorbellModal() {
         intercomReady,
         micOn,
         hasMicTrack,
-        canStartIntercom,
         prepareForCall,
         startIntercom,
         toggleMic,
@@ -109,8 +106,7 @@ export default function DoorbellModal() {
         resetIntercom();
         chimeTriggeredRef.current = false;
 
-        setSoundEnabled(false);
-        setRemoteMuted(false);
+        setAudible(false);
         setRemoteVolume(1);
         setErr(null);
     }, [newPeer, resetMediaEls, resetIntercom]);
@@ -120,6 +116,7 @@ export default function DoorbellModal() {
         cleanup();
     }, [cleanup]);
 
+    // Schlechte ICE-States -> aufräumen
     useEffect(() => {
         if (BAD_ICE.has(iceConn)) {
             closeModalAndCleanup();
@@ -184,31 +181,32 @@ export default function DoorbellModal() {
     );
     useSignalingBootstrap(WS_URL, wsRef, pcRef, signalingHandlers);
 
-    // Audio-Ref syncen
-    useRemoteAudioSync(remoteAudioRef, soundEnabled, remoteMuted, remoteVolume);
+    // Audio-Ref syncen (setzt nur muted/volume; kein play() hier)
+    useRemoteAudioSync(remoteAudioRef, audible, remoteVolume);
 
     // UI-Actions
-    const enableSound = useCallback(async () => {
+    const toggleAudible = useCallback(async () => {
         const a = remoteAudioRef.current;
         if (!a) return;
+
+        if (audible) {
+            // -> Mute
+            setAudible(false);
+            return;
+        }
+
+        // -> Unmute & (erstmals) abspielen
         try {
             a.muted = false;
             await a.play();
-            setSoundEnabled(true);
-            setRemoteMuted(false);
+            setAudible(true);
         } catch (ex) {
             const m = ex instanceof Error ? ex.message : String(ex);
-            console.warn("enableSound play failed:", ex);
+            console.warn("audio play failed:", ex);
             setErr(`Audio konnte nicht gestartet werden: ${m}`);
+            a.muted = true; // zurückrollen
         }
-    }, []);
-
-    const toggleRemoteMute = useCallback(() => {
-        const a = remoteAudioRef.current;
-        if (!a) return;
-        a.muted = !a.muted;
-        setRemoteMuted(a.muted);
-    }, []);
+    }, [audible]);
 
     const changeRemoteVolume = useCallback((v: number) => {
         const a = remoteAudioRef.current;
@@ -216,6 +214,14 @@ export default function DoorbellModal() {
         a.volume = v;
         setRemoteVolume(v);
     }, []);
+
+    const handleMicToggle = useCallback(async () => {
+        if (!hasMicTrack) {
+            await startIntercom();
+        } else {
+            toggleMic();
+        }
+    }, [hasMicTrack, startIntercom, toggleMic]);
 
     const hangup = useCallback(() => {
         const ws = wsRef.current;
@@ -252,21 +258,17 @@ export default function DoorbellModal() {
                     <audio ref={remoteAudioRef} autoPlay muted />
 
                     <DoorbellControls
-                        soundEnabled={soundEnabled}
-                        remoteMuted={remoteMuted}
+                        audible={audible}
                         remoteVolume={remoteVolume}
-                        canStartIntercom={canStartIntercom}
                         micOn={micOn}
                         hasMicTrack={hasMicTrack}
-                        iceConn={iceConn}
-                        onEnableSound={enableSound}
-                        onToggleRemoteMute={toggleRemoteMute}
+                        onToggleAudible={toggleAudible}
                         onChangeRemoteVolume={changeRemoteVolume}
-                        onStartIntercom={startIntercom}
-                        onToggleMic={toggleMic}
+                        onToggleMic={handleMicToggle}
                         onPttDown={pttDown}
                         onPttUp={pttUp}
                     />
+
                     <DoorbellStatus
                         wsOpen={wsOpen}
                         sigState={sigState}

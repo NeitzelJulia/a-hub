@@ -1,45 +1,33 @@
+import "./DoorbellControls.css";
+
 type Props = Readonly<{
-    soundEnabled: boolean;
-    remoteMuted: boolean;
+    audible: boolean;
     remoteVolume: number;
-    canStartIntercom: boolean;
     micOn: boolean;
     hasMicTrack: boolean;
-    iceConn: RTCIceConnectionState;
 
-    onEnableSound: () => void;
-    onToggleRemoteMute: () => void;
+    onToggleAudible: () => void;
     onChangeRemoteVolume: (v: number) => void;
-    onStartIntercom: () => void;
     onToggleMic: () => void;
     onPttDown: () => void;
     onPttUp: () => void;
 }>;
 
 export default function DoorbellControls({
-                                             soundEnabled,
-                                             remoteMuted,
+                                             audible,
                                              remoteVolume,
-                                             canStartIntercom,
                                              micOn,
                                              hasMicTrack,
-                                             iceConn,
-                                             onEnableSound,
-                                             onToggleRemoteMute,
+                                             onToggleAudible,
                                              onChangeRemoteVolume,
-                                             onStartIntercom,
                                              onToggleMic,
                                              onPttDown,
                                              onPttUp,
                                          }: Props) {
     return (
         <div className="doorbell-controls">
-            <button className="btn btn-secondary" onClick={onEnableSound} disabled={soundEnabled}>
-                Ton einschalten
-            </button>
-
-            <button className="btn btn-secondary" onClick={onToggleRemoteMute}>
-                {remoteMuted ? "Unmute" : "Mute"}
+            <button className="btn btn-secondary" onClick={onToggleAudible}>
+                {audible ? "Ton aus" : "Ton an"}
             </button>
 
             <label className="doorbell-volume">
@@ -56,10 +44,6 @@ export default function DoorbellControls({
 
             <div className="doorbell-divider" />
 
-            <button className="btn btn-primary" onClick={onStartIntercom} disabled={!canStartIntercom}>
-                Mikro einschalten
-            </button>
-
             <button className="btn btn-dark" onClick={onToggleMic} disabled={!hasMicTrack}>
                 {micOn ? "Mic Off" : "Mic On"}
             </button>
@@ -75,8 +59,6 @@ export default function DoorbellControls({
             >
                 Push-to-Talk
             </button>
-
-            <div className="doorbell-ice">ICE: {iceConn}</div>
         </div>
     );
 }
