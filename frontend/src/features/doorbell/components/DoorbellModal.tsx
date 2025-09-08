@@ -1,3 +1,4 @@
+// src/features/doorbell/components/DoorbellModal.tsx
 import { useRef, useState, useMemo, useCallback, useEffect } from "react";
 import { Modal, ModalHeader } from "../../../shared/components/ui/Modal.tsx";
 import { getIntercomText, attachStream, clearStream } from "../utils/media";
@@ -119,7 +120,6 @@ export default function DoorbellModal() {
         cleanup();
     }, [cleanup]);
 
-    // Auf „schlechte“ ICE-States reagieren – hier zentral aufräumen
     useEffect(() => {
         if (BAD_ICE.has(iceConn)) {
             closeModalAndCleanup();
@@ -171,7 +171,7 @@ export default function DoorbellModal() {
 
     const handleBye = closeModalAndCleanup;
 
-    // Bootstrap WS + Peer (stabile Handler)
+    // Bootstrap WS + Peer
     const signalingHandlers = useMemo(
         () => ({
             setWsOpen,
@@ -188,7 +188,7 @@ export default function DoorbellModal() {
     useRemoteAudioSync(remoteAudioRef, soundEnabled, remoteMuted, remoteVolume);
 
     // UI-Actions
-    async function enableSound() {
+    const enableSound = useCallback(async () => {
         const a = remoteAudioRef.current;
         if (!a) return;
         try {
@@ -201,21 +201,23 @@ export default function DoorbellModal() {
             console.warn("enableSound play failed:", ex);
             setErr(`Audio konnte nicht gestartet werden: ${m}`);
         }
-    }
-    function toggleRemoteMute() {
+    }, []);
+
+    const toggleRemoteMute = useCallback(() => {
         const a = remoteAudioRef.current;
         if (!a) return;
         a.muted = !a.muted;
         setRemoteMuted(a.muted);
-    }
-    function changeRemoteVolume(v: number) {
+    }, []);
+
+    const changeRemoteVolume = useCallback((v: number) => {
         const a = remoteAudioRef.current;
         if (!a) return;
         a.volume = v;
         setRemoteVolume(v);
-    }
+    }, []);
 
-    function hangup() {
+    const hangup = useCallback(() => {
         const ws = wsRef.current;
         if (ws && ws.readyState === WebSocket.OPEN) {
             try {
@@ -225,7 +227,7 @@ export default function DoorbellModal() {
             }
         }
         closeModalAndCleanup();
-    }
+    }, [closeModalAndCleanup]);
 
     const intercomText = useMemo(
         () => getIntercomText(intercomReady, micOn),
