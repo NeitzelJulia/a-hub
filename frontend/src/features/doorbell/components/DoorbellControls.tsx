@@ -26,7 +26,7 @@ export default function DoorbellControls({
                                          }: Props) {
     return (
         <div className="doorbell-controls">
-            <button className="btn btn-secondary" onClick={onToggleAudible}>
+            <button onClick={onToggleAudible}>
                 {audible ? "Ton aus" : "Ton an"}
             </button>
 
@@ -44,12 +44,11 @@ export default function DoorbellControls({
 
             <div className="doorbell-divider" />
 
-            <button className="btn btn-dark" onClick={onToggleMic} disabled={!hasMicTrack}>
+            <button onClick={onToggleMic} disabled={!hasMicTrack}>
                 {micOn ? "Mic Off" : "Mic On"}
             </button>
 
             <button
-                className="btn btn-secondary"
                 onMouseDown={onPttDown}
                 onMouseUp={onPttUp}
                 onTouchStart={onPttDown}
