@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { Modal, ModalHeader } from "../../../shared/components/ui/Modal.tsx";
 import { getIntercomText, attachStream, clearStream } from "../utils/media";
+import { ICE_SERVERS, AUDIO_CONSTRAINTS, CHIME_ENDPOINT } from "../config";
 import "./DoorbellModal.css";
 
 type Signal =
@@ -8,16 +9,6 @@ type Signal =
     | { event: "answer"; data: RTCSessionDescriptionInit }
     | { event: "candidate"; data: RTCIceCandidateInit }
     | { event: "bye" };
-
-/* ---------- Konstanten ---------- */
-const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
-
-const AUDIO_CONSTRAINTS: MediaStreamConstraints = {
-    video: false,
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-};
-
-const CHIME_ENDPOINT: string = (import.meta.env.VITE_CHIME_URL as string) ?? "/api/chime/play";
 
 export default function DoorbellModal() {
     // Refs
