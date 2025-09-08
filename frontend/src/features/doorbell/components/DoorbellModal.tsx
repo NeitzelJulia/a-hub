@@ -66,27 +66,38 @@ export default function DoorbellModal() {
     } = useIntercom({ pcRef, audioConstraints: AUDIO_CONSTRAINTS, onError: setErr });
 
     // Peer-Fabrik
-    const newPeer = makeNewPeer({
-        wsRef,
-        iceServers: ICE_SERVERS,
-        onSig: setSigState,
-        onIce: (s) => {
-            setIceConn(s);
-            if (s === "failed" || s === "disconnected" || s === "closed") {
-                closeModalAndCleanup();
-            }
-        },
-        onStream: (stream) => {
-            const v = remoteVideoRef.current;
-            const a = remoteAudioRef.current;
-            if (v) {
-                attachStream(v, stream);
-                v.muted = true;
-                v.play().catch((e) => console.debug("remote video autoplay deferred:", e));
-            }
-            if (a) attachStream(a, stream);
-        },
-    });
+    const cleanupRef = useRef<() => void>(() => {});
+    const BAD_ICE = useMemo(
+        () => new Set<RTCIceConnectionState>(["failed", "disconnected", "closed"]),
+        []
+    );
+
+    const newPeer = useMemo(
+        () =>
+            makeNewPeer({
+                wsRef,
+                iceServers: ICE_SERVERS,
+                onSig: setSigState,
+                onIce: (s) => {
+                    setIceConn(s);
+                    if (BAD_ICE.has(s)) {
+                        setModalOpen(false);
+                        cleanupRef.current();
+                    }
+                },
+                onStream: (stream) => {
+                    const v = remoteVideoRef.current;
+                    const a = remoteAudioRef.current;
+                    if (v) {
+                        attachStream(v, stream);
+                        v.muted = true;
+                        v.play().catch((e) => console.debug("remote video autoplay deferred:", e));
+                    }
+                    if (a) attachStream(a, stream);
+                },
+            }),
+        [BAD_ICE]
+    );
 
     // Offer-Flow
     async function handleOffer(data: RTCSessionDescriptionInit) {
@@ -167,6 +178,8 @@ export default function DoorbellModal() {
         setRemoteVolume(1);
         setErr(null);
     }
+    // Cleanup-Funktion der Peer-Fabrik zugänglich machen
+    cleanupRef.current = cleanup;
 
     // UI-Actions
     async function enableSound() {
