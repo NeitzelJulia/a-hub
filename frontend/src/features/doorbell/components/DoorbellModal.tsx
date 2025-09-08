@@ -3,6 +3,7 @@ import { Modal, ModalHeader } from "../../../shared/components/ui/Modal.tsx";
 import { getIntercomText, attachStream, clearStream } from "../utils/media";
 import { ICE_SERVERS, AUDIO_CONSTRAINTS, CHIME_ENDPOINT } from "../config";
 import { handleWsMessage } from "../signaling";
+import { useRemoteAudioSync } from "../hooks/useRemoteAudioSync";
 import "./DoorbellModal.css";
 import DoorbellStatus from "./DoorbellStatus.tsx";
 import DoorbellControls from "./DoorbellControls.tsx";
@@ -316,17 +317,7 @@ export default function DoorbellModal() {
         };
     }, [WS_URL]);
 
-    /* ---- Sync: Audio-Element Muted/Volume mit State ---- */
-    useEffect(() => {
-        const a = remoteAudioRef.current;
-        if (!a) return;
-        a.muted = !(soundEnabled && !remoteMuted);
-        a.volume = remoteVolume;
-
-        if (soundEnabled && !a.muted) {
-            a.play().catch((e) => console.debug("audio play retry failed:", e));
-        }
-    }, [soundEnabled, remoteMuted, remoteVolume]);
+    useRemoteAudioSync(remoteAudioRef, soundEnabled, remoteMuted, remoteVolume);
 
     /* ---------------- UI Actions ---------------- */
     // Empfang (Tür -> Hub)
