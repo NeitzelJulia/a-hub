@@ -7,6 +7,8 @@ import { useSignalingBootstrap } from "../hooks/useSignalingBootstrap";
 import { useIntercom } from "../hooks/useIntercom";
 import { makeNewPeer } from "../rtc/peer";
 import { setRemoteOfferSafe, sendAnswerSafe } from "../rtc/sdp";
+import { triggerChimeOnce } from "../utils/chime";
+import { addCandidateSafe } from "../rtc/candidate";
 import "./DoorbellModal.css";
 import DoorbellStatus from "./DoorbellStatus.tsx";
 import DoorbellControls from "./DoorbellControls.tsx";
@@ -86,21 +88,7 @@ export default function DoorbellModal() {
         },
     });
 
-    // Signaling helpers
-    async function triggerChimeOnce() {
-        if (chimeTriggeredRef.current) return;
-        chimeTriggeredRef.current = true;
-        try {
-            const resp = await fetch(CHIME_ENDPOINT, { method: "POST" });
-            if (!resp.ok) {
-                const text = await resp.text().catch(() => "");
-                console.warn("Chime trigger failed:", resp.status, text);
-            }
-        } catch (e) {
-            console.warn("Chime trigger error:", e);
-        }
-    }
-
+    // Offer-Flow
     async function handleOffer(data: RTCSessionDescriptionInit) {
         const pc = pcRef.current;
         if (!pc) return;
@@ -115,7 +103,7 @@ export default function DoorbellModal() {
         // UI sofort; Chime fire-and-forget
         setModalOpen(true);
         setErr(null);
-        void triggerChimeOnce();
+        void triggerChimeOnce(chimeTriggeredRef, CHIME_ENDPOINT);
 
         const resOffer = await setRemoteOfferSafe(pc, data);
         if (!resOffer.ok) {
@@ -134,10 +122,9 @@ export default function DoorbellModal() {
     async function handleCandidate(data: RTCIceCandidateInit) {
         const pc = pcRef.current;
         if (!pc) return;
-        try {
-            await pc.addIceCandidate(new RTCIceCandidate(data));
-        } catch (ex) {
-            console.warn("addIceCandidate (hub) failed:", ex);
+        const res = await addCandidateSafe(pc, data);
+        if (!res.ok) {
+            console.warn("addIceCandidate (hub) failed:", res.error);
         }
     }
 
