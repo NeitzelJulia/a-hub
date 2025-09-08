@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, useCallback, useEffect } from "react";
 import { Modal, ModalHeader } from "../../../shared/components/ui/Modal.tsx";
 import { getIntercomText, attachStream, clearStream } from "../utils/media";
 import { ICE_SERVERS, AUDIO_CONSTRAINTS, CHIME_ENDPOINT } from "../config";
@@ -12,6 +12,8 @@ import { addCandidateSafe } from "../rtc/candidate";
 import "./DoorbellModal.css";
 import DoorbellStatus from "./DoorbellStatus.tsx";
 import DoorbellControls from "./DoorbellControls.tsx";
+
+const BAD_ICE = new Set<RTCIceConnectionState>(["failed", "disconnected", "closed"]);
 
 export default function DoorbellModal() {
     // Refs
@@ -36,20 +38,21 @@ export default function DoorbellModal() {
     }
     const WS_URL: string = import.meta.env.VITE_SIGNALING_WS_URL;
 
-    function closeModalAndCleanup() {
-        setModalOpen(false);
-        cleanup();
-    }
-
-    function resetMediaEls() {
+    // Media-Reset
+    const resetMediaEls = useCallback(() => {
         clearStream(remoteVideoRef.current);
         const a = remoteAudioRef.current;
         if (a) {
+            try {
+                a.pause();
+            } catch (e) {
+                console.debug("audio pause failed:", e);
+            }
             clearStream(a);
             a.muted = true;
             a.volume = 1;
         }
-    }
+    }, []);
 
     // Intercom
     const {
@@ -66,25 +69,13 @@ export default function DoorbellModal() {
     } = useIntercom({ pcRef, audioConstraints: AUDIO_CONSTRAINTS, onError: setErr });
 
     // Peer-Fabrik
-    const cleanupRef = useRef<() => void>(() => {});
-    const BAD_ICE = useMemo(
-        () => new Set<RTCIceConnectionState>(["failed", "disconnected", "closed"]),
-        []
-    );
-
     const newPeer = useMemo(
         () =>
             makeNewPeer({
                 wsRef,
                 iceServers: ICE_SERVERS,
                 onSig: setSigState,
-                onIce: (s) => {
-                    setIceConn(s);
-                    if (BAD_ICE.has(s)) {
-                        setModalOpen(false);
-                        cleanupRef.current();
-                    }
-                },
+                onIce: setIceConn,
                 onStream: (stream) => {
                     const v = remoteVideoRef.current;
                     const a = remoteAudioRef.current;
@@ -96,67 +87,11 @@ export default function DoorbellModal() {
                     if (a) attachStream(a, stream);
                 },
             }),
-        [BAD_ICE]
+        []
     );
 
-    // Offer-Flow
-    async function handleOffer(data: RTCSessionDescriptionInit) {
-        const pc = pcRef.current;
-        if (!pc) return;
-
-        const state = pc.signalingState;
-        const okState = state === "stable" || state === "have-remote-offer";
-        if (!okState) {
-            console.warn("Ignoring offer in state:", state);
-            return;
-        }
-
-        // UI sofort; Chime fire-and-forget
-        setModalOpen(true);
-        setErr(null);
-        void triggerChimeOnce(chimeTriggeredRef, CHIME_ENDPOINT);
-
-        const resOffer = await setRemoteOfferSafe(pc, data);
-        if (!resOffer.ok) {
-            setErr(`Offer konnte nicht gesetzt werden: ${resOffer.error}`);
-            return;
-        }
-
-        await prepareForCall();
-
-        const resAns = await sendAnswerSafe(pc, wsRef.current);
-        if (!resAns.ok) {
-            setErr(`Answer fehlgeschlagen: ${resAns.error}`);
-        }
-    }
-
-    async function handleCandidate(data: RTCIceCandidateInit) {
-        const pc = pcRef.current;
-        if (!pc) return;
-        const res = await addCandidateSafe(pc, data);
-        if (!res.ok) {
-            console.warn("addIceCandidate (hub) failed:", res.error);
-        }
-    }
-
-    function handleBye() {
-        closeModalAndCleanup();
-    }
-
-    // Bootstrap WS + Peer
-    useSignalingBootstrap(WS_URL, wsRef, pcRef, {
-        setWsOpen,
-        newPeer,
-        onOffer: handleOffer,
-        onCandidate: handleCandidate,
-        onBye: handleBye,
-    });
-
-    // Audio-Ref syncen
-    useRemoteAudioSync(remoteAudioRef, soundEnabled, remoteMuted, remoteVolume);
-
     // Cleanup Wrapper
-    function cleanup() {
+    const cleanup = useCallback(() => {
         try {
             pcRef.current?.getSenders().forEach((s) => s.track?.stop());
         } catch (e) {
@@ -177,9 +112,80 @@ export default function DoorbellModal() {
         setRemoteMuted(false);
         setRemoteVolume(1);
         setErr(null);
-    }
-    // Cleanup-Funktion der Peer-Fabrik zugänglich machen
-    cleanupRef.current = cleanup;
+    }, [newPeer, resetMediaEls, resetIntercom]);
+
+    const closeModalAndCleanup = useCallback(() => {
+        setModalOpen(false);
+        cleanup();
+    }, [cleanup]);
+
+    // Auf „schlechte“ ICE-States reagieren – hier zentral aufräumen
+    useEffect(() => {
+        if (BAD_ICE.has(iceConn)) {
+            closeModalAndCleanup();
+        }
+    }, [iceConn, closeModalAndCleanup]);
+
+    // Offer-Flow
+    const handleOffer = useCallback(
+        async (data: RTCSessionDescriptionInit) => {
+            const pc = pcRef.current;
+            if (!pc) return;
+
+            const state = pc.signalingState;
+            const okState = state === "stable" || state === "have-remote-offer";
+            if (!okState) {
+                console.warn("Ignoring offer in state:", state);
+                return;
+            }
+
+            // UI sofort; Chime fire-and-forget
+            setModalOpen(true);
+            setErr(null);
+            void triggerChimeOnce(chimeTriggeredRef, CHIME_ENDPOINT);
+
+            const resOffer = await setRemoteOfferSafe(pc, data);
+            if (!resOffer.ok) {
+                setErr(`Offer konnte nicht gesetzt werden: ${resOffer.error}`);
+                return;
+            }
+
+            await prepareForCall();
+
+            const resAns = await sendAnswerSafe(pc, wsRef.current);
+            if (!resAns.ok) {
+                setErr(`Answer fehlgeschlagen: ${resAns.error}`);
+            }
+        },
+        [prepareForCall]
+    );
+
+    const handleCandidate = useCallback(async (data: RTCIceCandidateInit) => {
+        const pc = pcRef.current;
+        if (!pc) return;
+        const res = await addCandidateSafe(pc, data);
+        if (!res.ok) {
+            console.warn("addIceCandidate (hub) failed:", res.error);
+        }
+    }, []);
+
+    const handleBye = closeModalAndCleanup;
+
+    // Bootstrap WS + Peer (stabile Handler)
+    const signalingHandlers = useMemo(
+        () => ({
+            setWsOpen,
+            newPeer,
+            onOffer: handleOffer,
+            onCandidate: handleCandidate,
+            onBye: handleBye,
+        }),
+        [newPeer, handleOffer, handleCandidate, handleBye]
+    );
+    useSignalingBootstrap(WS_URL, wsRef, pcRef, signalingHandlers);
+
+    // Audio-Ref syncen
+    useRemoteAudioSync(remoteAudioRef, soundEnabled, remoteMuted, remoteVolume);
 
     // UI-Actions
     async function enableSound() {
