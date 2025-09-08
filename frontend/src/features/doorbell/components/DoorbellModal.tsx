@@ -2,15 +2,10 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { Modal, ModalHeader } from "../../../shared/components/ui/Modal.tsx";
 import { getIntercomText, attachStream, clearStream } from "../utils/media";
 import { ICE_SERVERS, AUDIO_CONSTRAINTS, CHIME_ENDPOINT } from "../config";
+import { handleWsMessage } from "../signaling";
 import "./DoorbellModal.css";
 import DoorbellStatus from "./DoorbellStatus.tsx";
 import DoorbellControls from "./DoorbellControls.tsx";
-
-type Signal =
-    | { event: "offer"; data: RTCSessionDescriptionInit }
-    | { event: "answer"; data: RTCSessionDescriptionInit }
-    | { event: "candidate"; data: RTCIceCandidateInit }
-    | { event: "bye" };
 
 export default function DoorbellModal() {
     // Refs
@@ -292,29 +287,12 @@ export default function DoorbellModal() {
         pcRef.current = pc;
 
         // WS-Message-Handler
-        ws.onmessage = async (e) => {
-            let msg: Signal | null = null;
-            try {
-                msg = JSON.parse(e.data) as Signal;
-            } catch (parseErr) {
-                console.warn("WS parse failed:", parseErr);
-                return;
-            }
-            if (!msg) return;
-
-            switch (msg.event) {
-                case "offer":
-                    await handleOffer(msg.data);
-                    break;
-                case "candidate":
-                    await handleCandidate(msg.data);
-                    break;
-                case "bye":
-                    handleBye();
-                    break;
-                case "answer":
-                    break;
-            }
+        ws.onmessage = (e) => {
+            handleWsMessage(e.data, {
+                onOffer: handleOffer,
+                onCandidate: handleCandidate,
+                onBye: handleBye,
+            });
         };
 
         // Cleanup for mount/unmount
