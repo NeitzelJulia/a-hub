@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { Modal, ModalHeader } from "../../../shared/components/ui/Modal.tsx";
+import { getIntercomText, attachStream, clearStream } from "../utils/media";
 import "./DoorbellModal.css";
 
 type Signal =
@@ -17,39 +18,6 @@ const AUDIO_CONSTRAINTS: MediaStreamConstraints = {
 };
 
 const CHIME_ENDPOINT: string = (import.meta.env.VITE_CHIME_URL as string) ?? "/api/chime/play";
-
-/* ---------- kleine Utils ---------- */
-function getIntercomText(ready: boolean, on: boolean): string {
-    if (!ready) return "not started";
-    return on ? "mic on" : "mic off";
-}
-
-function attachStream(el: HTMLMediaElement | null, stream: MediaStream | null) {
-    if (!el) return;
-    el.srcObject = stream;
-}
-
-function clearStream(el: HTMLMediaElement | null) {
-    if (!el) return;
-
-    if (!el.paused) {
-        try {
-            el.pause();
-        } catch (e) {
-            console.debug("clearStream: pause() threw, continuing to clear stream", e);
-        }
-    }
-
-    el.srcObject = null;
-
-    try {
-        el.removeAttribute("src");
-        el.load();
-    } catch (e) {
-        console.debug("clearStream: load() threw", e);
-    }
-}
-/* ------------------------------------------------------------- */
 
 export default function DoorbellModal() {
     // Refs
