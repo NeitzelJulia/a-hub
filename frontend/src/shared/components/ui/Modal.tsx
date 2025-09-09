@@ -1,5 +1,4 @@
-import React, { useEffect } from "react";
-import { createPortal } from "react-dom";
+import React, { useEffect, useRef } from "react";
 import "./Modal.css";
 
 type ModalProps = Readonly<{
@@ -17,45 +16,76 @@ export function Modal({
                           closeOnOverlay = true,
                           children,
                       }: ModalProps) {
-    // ESC schließt
+    const dialogRef = useRef<HTMLDialogElement | null>(null);
+    const panelRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        const dlg = dialogRef.current;
+        if (!dlg) return;
+
+        if (open && !dlg.hasAttribute("open")) {
+            try {
+                dlg.setAttribute("open", "");
+            } catch {
+                dlg.setAttribute("open", "");
+            }
+        } else if (!open && dlg.hasAttribute("open")) {
+            dlg.removeAttribute("open");
+        }
+    }, [open]);
+
+    // ESC → schließen
     useEffect(() => {
         if (!open) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
+        const dlg = dialogRef.current;
+        if (!dlg) return;
+
+        const onCancel = (e: Event) => {
+            e.preventDefault();
+            onClose();
         };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
+        dlg.addEventListener("cancel", onCancel);
+        return () => dlg.removeEventListener("cancel", onCancel);
     }, [open, onClose]);
 
-    // Body-Scroll sperren, solange Modal offen ist
     useEffect(() => {
-        if (!open) return;
-        const prev = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-        return () => {
-            document.body.style.overflow = prev;
+        if (!open || !closeOnOverlay) return;
+
+        const handler = (e: PointerEvent) => {
+            const panel = panelRef.current;
+            if (!panel) return;
+
+            const path = (e.composedPath?.() ?? []);
+            const clickedInside =
+                path.includes(panel) ||
+                (e.target instanceof Node && panel.contains(e.target));
+
+            if (!clickedInside) {
+                onClose();
+            }
         };
-    }, [open]);
+
+        document.addEventListener("pointerdown", handler, { capture: true });
+        return () => document.removeEventListener("pointerdown", handler, { capture: true });
+    }, [open, closeOnOverlay, onClose]);
 
     if (!open) return null;
 
-    return createPortal(
-        <div
-            className="modal-root"
-            role="dialog"
-            aria-modal="true"
+    return (
+        <dialog
+            ref={dialogRef}
+            className="modal"
             aria-labelledby={titleId}
-            onClick={closeOnOverlay ? onClose : undefined}
+            aria-modal="true"
         >
-            <div className="modal-overlay" />
             <div
+                ref={panelRef}
                 className="modal-panel"
-                onClick={(e) => e.stopPropagation()}
+                tabIndex={-1}
             >
                 {children}
             </div>
-        </div>,
-        document.body
+        </dialog>
     );
 }
 
