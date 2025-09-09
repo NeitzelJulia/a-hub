@@ -17,70 +17,74 @@ export function Modal({
                           children,
                       }: ModalProps) {
     const dialogRef = useRef<HTMLDialogElement | null>(null);
+    const panelRef = useRef<HTMLDivElement | null>(null);
 
-    // ESC schließt
-    useEffect(() => {
-        if (!open) return;
-        const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [open, onClose]);
-
-    // Öffnen/Schließen steuern
     useEffect(() => {
         const dlg = dialogRef.current;
         if (!dlg) return;
 
-        if (open && !dlg.open) {
+        if (open && !dlg.hasAttribute("open")) {
             try {
-                if (typeof dlg.showModal === "function") dlg.showModal();
-                else dlg.setAttribute("open", ""); // Safari Fallback
+                dlg.setAttribute("open", "");
             } catch {
                 dlg.setAttribute("open", "");
             }
-        }
-        if (!open && dlg.open) {
-            try {
-                dlg.close();
-            } finally {
-                dlg.removeAttribute("open");
-            }
+        } else if (!open && dlg.hasAttribute("open")) {
+            dlg.removeAttribute("open");
         }
     }, [open]);
 
-
+    // ESC → schließen
     useEffect(() => {
+        if (!open) return;
         const dlg = dialogRef.current;
         if (!dlg) return;
-
-        const onPointerDown = (e: PointerEvent) => {
-            if (!closeOnOverlay) return;
-            if (e.target === dlg) onClose();
-        };
-
 
         const onCancel = (e: Event) => {
             e.preventDefault();
             onClose();
         };
-
-        dlg.addEventListener("pointerdown", onPointerDown);
         dlg.addEventListener("cancel", onCancel);
-        return () => {
-            dlg.removeEventListener("pointerdown", onPointerDown);
-            dlg.removeEventListener("cancel", onCancel);
+        return () => dlg.removeEventListener("cancel", onCancel);
+    }, [open, onClose]);
+
+    useEffect(() => {
+        if (!open || !closeOnOverlay) return;
+
+        const handler = (e: PointerEvent) => {
+            const panel = panelRef.current;
+            if (!panel) return;
+
+            const path = (e.composedPath?.() ?? []);
+            const clickedInside =
+                path.includes(panel) ||
+                (e.target instanceof Node && panel.contains(e.target));
+
+            if (!clickedInside) {
+                onClose();
+            }
         };
-    }, [closeOnOverlay, onClose]);
+
+        document.addEventListener("pointerdown", handler, { capture: true });
+        return () => document.removeEventListener("pointerdown", handler, { capture: true });
+    }, [open, closeOnOverlay, onClose]);
 
     if (!open) return null;
 
     return (
         <dialog
             ref={dialogRef}
-            className="modal-content"
+            className="modal"
             aria-labelledby={titleId}
+            aria-modal="true"
         >
-            {children}
+            <div
+                ref={panelRef}
+                className="modal-panel"
+                tabIndex={-1}
+            >
+                {children}
+            </div>
         </dialog>
     );
 }
