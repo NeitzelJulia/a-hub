@@ -1,30 +1,20 @@
 import { DashboardLayout } from "../../features/dashboard";
 import "./DashboardPage.css";
+import {ClockCard} from "../../features/dashboard/ui/ClockCard.tsx";
 
 export default function DashboardPage() {
     return (
         <DashboardLayout
-            topLeftClass="auto"
-            mainLeftClass="grow-2"
-            bottomLeftClass="grow-2"
+            topLeftClass="grow-2"
+            mainLeftClass="grow-3"
+            bottomLeftClass="grow-3"
 
             topRightClass="grow-2"
             mainRightClass="grow-2"
             bottomRightClass="auto"
 
             topLeft={
-                <div className="card row-split">
-                    <div className="stack">
-                        <div className="eyebrow">Jetzt</div>
-                        <div className="big">11:23</div>
-                        <div className="muted">Mo, 9. Sept</div>
-                    </div>
-                    <div className="stack right">
-                        <div className="eyebrow">Wetter</div>
-                        <div className="big">19°C · Sonne</div>
-                        <div className="muted">Morgen: Regen</div>
-                    </div>
-                </div>
+                <ClockCard/>
             }
 
             topRight={
