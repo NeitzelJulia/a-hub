@@ -1,0 +1,86 @@
+:root{
+    --radius: 12px;
+    --border: rgba(255,255,255,0.14);
+}
+
+.card{
+    background-color: #1a1a1a;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+
+    /* erlaubt inneres Scrolling in hohen Slots */
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+@media (prefers-color-scheme: light) {
+    .card{
+        background-color: #f9f9f9;
+        border: 1px solid rgba(0,0,0,0.12);
+    }
+}
+
+.row-split{
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.stack{ display:flex; flex-direction:column; gap:4px; }
+.stack.right{ align-items:flex-end; text-align:right; }
+
+.title{ font-weight:600; margin-bottom:8px; }
+.eyebrow{ font-size:12px; letter-spacing:.04em; text-transform:uppercase; opacity:.7; }
+.big{ font-size:28px; line-height:1; }
+.muted{ opacity:.65; }
+
+.list{
+    display:grid;
+    gap:10px;
+    padding-left:0;
+    margin:0;
+    list-style:none;
+
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+.list.compact{ gap:6px; }
+
+.item-text{ margin-left:8px; }
+
+.badge{
+    font-size:12px;
+    padding:2px 8px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+}
+.badge.ok{ box-shadow: 0 0 0 1px rgba(0,255,128,0.25) inset; }
+.badge.warn{ box-shadow: 0 0 0 1px rgba(255,200,0,0.25) inset; }
+
+.chip{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:4px 10px; border-radius:999px;
+    background: rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.12);
+    margin:6px 0;
+}
+.chip-ok{ box-shadow: 0 0 0 1px rgba(0,255,128,0.25) inset; }
+
+.btn{ width:100%; margin-top:8px; }
+
+.dot{
+    display:inline-block; width:8px; height:8px; border-radius:50%;
+    background: currentColor; margin-right:8px; vertical-align:middle;
+}
+
+.swatch{
+    display:inline-block; width:10px; height:10px; border-radius:2px;
+    margin-right:8px; vertical-align:middle;
+}
+.swatch.paper{ background:#4da3ff; }
+.swatch.residual{ background:#9e9e9e; }

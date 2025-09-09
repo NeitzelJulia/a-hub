@@ -12,7 +12,8 @@
     background: rgba(0,0,0,0.6);
 }
 
-.modal-content {
+.modal-panel {
+    position: relative;
     width: min(92vw, 900px);
     background: #121212;
     color: #eee;
@@ -34,4 +35,6 @@
     align-items: center;
     margin-bottom: 8px;
 }
-.modal-header h3 { margin: 0; }
+.modal-header h3 {
+    margin: 0;
+}

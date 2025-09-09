@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import "./Modal.css";
 
 type ModalProps = Readonly<{
@@ -16,72 +17,45 @@ export function Modal({
                           closeOnOverlay = true,
                           children,
                       }: ModalProps) {
-    const dialogRef = useRef<HTMLDialogElement | null>(null);
-
     // ESC schließt
     useEffect(() => {
         if (!open) return;
-        const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose();
+        };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [open, onClose]);
 
-    // Öffnen/Schließen steuern
+    // Body-Scroll sperren, solange Modal offen ist
     useEffect(() => {
-        const dlg = dialogRef.current;
-        if (!dlg) return;
-
-        if (open && !dlg.open) {
-            try {
-                if (typeof dlg.showModal === "function") dlg.showModal();
-                else dlg.setAttribute("open", ""); // Safari Fallback
-            } catch {
-                dlg.setAttribute("open", "");
-            }
-        }
-        if (!open && dlg.open) {
-            try {
-                dlg.close();
-            } finally {
-                dlg.removeAttribute("open");
-            }
-        }
-    }, [open]);
-
-
-    useEffect(() => {
-        const dlg = dialogRef.current;
-        if (!dlg) return;
-
-        const onPointerDown = (e: PointerEvent) => {
-            if (!closeOnOverlay) return;
-            if (e.target === dlg) onClose();
-        };
-
-
-        const onCancel = (e: Event) => {
-            e.preventDefault();
-            onClose();
-        };
-
-        dlg.addEventListener("pointerdown", onPointerDown);
-        dlg.addEventListener("cancel", onCancel);
+        if (!open) return;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
         return () => {
-            dlg.removeEventListener("pointerdown", onPointerDown);
-            dlg.removeEventListener("cancel", onCancel);
+            document.body.style.overflow = prev;
         };
-    }, [closeOnOverlay, onClose]);
+    }, [open]);
 
     if (!open) return null;
 
-    return (
-        <dialog
-            ref={dialogRef}
-            className="modal-content"
+    return createPortal(
+        <div
+            className="modal-root"
+            role="dialog"
+            aria-modal="true"
             aria-labelledby={titleId}
+            onClick={closeOnOverlay ? onClose : undefined}
         >
-            {children}
-        </dialog>
+            <div className="modal-overlay" />
+            <div
+                className="modal-panel"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {children}
+            </div>
+        </div>,
+        document.body
     );
 }
 
