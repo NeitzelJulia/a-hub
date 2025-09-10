@@ -8,6 +8,12 @@
     container-name: clock;
 }
 
+.clock-card > div{
+    display:flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
 .clock-card .big {
     font-size: clamp(28px, max(10cqh, 6cqw), 72px);
     line-height: 1;
@@ -17,10 +23,12 @@
 
 .clock-card .muted {
     font-size: clamp(13px, max(4cqh, 2.6cqw), 22px);
+    text-align: center;
 }
 
 .clock-card .eyebrow {
-    font-size: clamp(11px, max(3cqh, 2cqw), 14px);
+    font-size: clamp(11px, max(4cqh, 2.6cqw), 22px);
+    text-align: center;
 }
 
 .card.clock-card {
