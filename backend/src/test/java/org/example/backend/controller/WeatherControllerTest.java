@@ -1,9 +1,10 @@
 package org.example.backend.controller;
 
-import org.example.backend.client.openmeteo.OpenMeteoClient;
-import org.example.backend.model.weather.OpenMeteoDto;
+import org.example.backend.model.weather.WeatherSnapshot;
 import org.example.backend.service.WeatherService;
+import org.example.backend.service.WeatherStreamBroadcaster;
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -11,50 +12,65 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.List;
+import java.io.IOException;
+import java.time.OffsetDateTime;
 
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-class WeatherControllerIT {
+class WeatherControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
-    private WeatherService weatherService;
+    @MockitoBean
+    private WeatherService service;
 
     @MockitoBean
-    private OpenMeteoClient meteoClient;
+    private WeatherStreamBroadcaster broadcaster;
 
-    private OpenMeteoDto sampleDto() {
-        return new OpenMeteoDto(
-                new OpenMeteoDto.Daily(
-                        List.of("2025-09-10","2025-09-11"),
-                        List.of(21, 18),
-                        List.of(12, 10),
-                        List.of(0.3, 2.1),
-                        List.of(2, 61),
-                        List.of("2025-09-10T06:54","2025-09-11T06:56"),
-                        List.of("2025-09-10T19:43","2025-09-11T19:41"),
-                        List.of(40, 60),
-                        List.of(70, 80)
-                )
+    @BeforeEach
+    void setUp() throws IOException {
+        var today = new WeatherSnapshot.Day(
+                21,
+                12,
+                0.3,
+                2,
+                40,
+                70,
+                "2025-09-10T06:54",
+                "2025-09-10T19:43"
         );
+        var tomorrow = new WeatherSnapshot.Day(
+                18,
+                10,
+                2.1,
+                61,
+                60,
+                80,
+                "2025-09-11T06:56",
+                "2025-09-11T19:41"
+        );
+        var snap = new WeatherSnapshot(
+                OffsetDateTime.parse("2025-09-10T08:00:00+02:00"),
+                today,
+                tomorrow
+        );
+
+        when(service.snapshot()).thenReturn(snap);
+        var emitter = new SseEmitter();
+        when(broadcaster.register(snap)).thenReturn(emitter);
+        emitter.complete();
     }
 
     @Test
-    void get_shouldReturnSnapshot_afterRefresh() throws Exception {
-        when(meteoClient.fetchDailySummary(anyDouble(), anyDouble(), anyString(), eq(2)))
-                .thenReturn(sampleDto());
-
-        // Build cache via service
-        weatherService.refresh();
+    void get_shouldReturnSnapshot() throws Exception {
 
         mockMvc.perform(get("/api/weather"))
                 .andExpect(status().isOk())
@@ -74,13 +90,14 @@ class WeatherControllerIT {
     }
 
     @Test
-    void stream_shouldReturnEventStream() throws Exception {
-        when(meteoClient.fetchDailySummary(anyDouble(), anyDouble(), anyString(), eq(2)))
-                .thenReturn(sampleDto());
+    void stream_registersEmitter_andReturnsEventStream() throws Exception {
+        var mvcResult = mockMvc.perform(
+                        get("/api/weather/stream")
+                                .accept(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(request().asyncStarted())
+                .andReturn();
 
-        weatherService.refresh();
-
-        mockMvc.perform(get("/api/weather/stream"))
+        mockMvc.perform(asyncDispatch(mvcResult))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Type", Matchers.startsWith("text/event-stream")));
     }
