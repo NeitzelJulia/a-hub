@@ -2,11 +2,11 @@ package org.example.backend.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.client.openmeteo.OpenMeteoClient;
 import org.example.backend.model.weather.OpenMeteoDto;
 import org.example.backend.model.weather.WeatherSnapshot;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
 import java.time.OffsetDateTime;
 import java.util.concurrent.atomic.AtomicReference;
@@ -24,32 +24,19 @@ public class WeatherService {
     private static final long REFRESH_DELAY_MS = REFRESH_MINUTES * 60_000L;
 
     private final WeatherStreamBroadcaster broadcaster;
-    private final RestClient http = RestClient.create();
+    private final OpenMeteoClient meteo;
+
     private final AtomicReference<WeatherSnapshot> cache = new AtomicReference<>();
 
     public WeatherSnapshot snapshot() { return cache.get(); }
 
     @Scheduled(initialDelay = 5_000, fixedDelay = REFRESH_DELAY_MS)
     public void refresh() {
-        String url = "https://api.open-meteo.com/v1/forecast"
-                + "?latitude=" + LAT
-                + "&longitude=" + LON
-                + "&current_weather=true"
-                + "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode,"
-                + "sunrise,sunset,precipitation_probability_mean,precipitation_probability_max"
-                + "&timezone=" + TIMEZONE;
-
         try {
-            var data = http.get().uri(url).retrieve().body(OpenMeteoDto.class);
-            if (data == null || data.current_weather() == null || data.daily() == null) return;
+            OpenMeteoDto data = meteo.fetchDailySummary(LAT, LON, TIMEZONE, 2);
+            if (data == null || data.daily() == null) return;
 
-            var cur = data.current_weather();
-            var d   = data.daily();
-
-            var now = new WeatherSnapshot.Now(
-                    (int)Math.round(cur.temperature()),
-                    cur.weathercode()
-            );
+            var d = data.daily();
 
             var today = new WeatherSnapshot.Day(
                     getAt(d.temperature_2m_max(), 0),
@@ -73,11 +60,11 @@ public class WeatherService {
                     getAt(d.sunset(), 1)
             );
 
-            var snap = new WeatherSnapshot(OffsetDateTime.now(), now, today, tomorrow);
+            var snap = new WeatherSnapshot(OffsetDateTime.now(), today, tomorrow);
             cache.set(snap);
             broadcaster.broadcast(snap);
-            log.debug("weather refreshed: now={}°C, today.max={}, tomorrow.max={}",
-                    now.tempC(), today.max(), tomorrow.max());
+            log.debug("weather refreshed (daily summary): today.max={}, tomorrow.max={}",
+                    today.max(), tomorrow.max());
         } catch (Exception ex) {
             log.warn("weather refresh failed: {}", ex.getMessage());
         }
