@@ -19,7 +19,11 @@ function fmtDate(d: Date) {
         month: "short",
         timeZone: TZ,
     }).format(d);
-    return parts.replaceAll(".", "").replace(/\s*,\s*/g, ", ");
+    return parts
+        .replaceAll(".", "")
+        .split(",")
+        .map(part => part.trim())
+        .join(", ");
 }
 
 export function useClock(intervalMs = 1000) {
