@@ -57,6 +57,7 @@
     display: flex;
     justify-content: center;
     gap: clamp(4px, 1.6cqw, 10px);
+    font-size: clamp(13px, max(4cqh, 2cqw), 22px);
 }
 
 .clock-card .wx-desc {

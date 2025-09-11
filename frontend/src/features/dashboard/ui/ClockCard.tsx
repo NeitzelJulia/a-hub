@@ -25,7 +25,7 @@ export function ClockCard() {
 
             <div>
                 <div className="eyebrow">Heute</div>
-                <div className="muted wx-desc">{tIcon.label}</div> {/* ← NEU */}
+                <div className="muted wx-desc">{tIcon.label}</div>
                 <div className="big temp-row">
                     <span className="wx-icon" aria-hidden>{tIcon.emoji}</span>
                     <span>{formatTemperatureCelsius(today?.max)}</span>
@@ -38,7 +38,7 @@ export function ClockCard() {
 
             <div>
                 <div className="eyebrow">Morgen</div>
-                <div className="muted wx-desc">{mIcon.label}</div> {/* ← NEU */}
+                <div className="muted wx-desc">{mIcon.label}</div>
                 <div className="big temp-row">
                     <span className="wx-icon" aria-hidden>{mIcon.emoji}</span>
                     <span>{formatTemperatureCelsius(tomorrow?.max)}</span>
