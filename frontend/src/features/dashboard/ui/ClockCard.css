@@ -6,12 +6,14 @@
     justify-content: space-evenly;
     container-type: size;
     container-name: clock;
+    gap: clamp(12px, 4cqh, 20px);
 }
 
-.clock-card > div{
-    display:flex;
+.clock-card > div {
+    display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: clamp(6px, 2.4cqh, 12px);
+    min-width: 0;
 }
 
 .clock-card .big {
@@ -31,12 +33,45 @@
     text-align: center;
 }
 
-.card.clock-card {
-    gap: clamp(12px, 4cqh, 20px);
+@supports not (font-size: 1cqh) {
+    .clock-card .big     { font-size: clamp(24px, 8vh, 72px); }
+    .clock-card .muted   { font-size: clamp(12px, 3vh, 22px); }
+    .clock-card .eyebrow { font-size: clamp(10px, 2vh, 14px); }
+}
+
+.clock-card .temp-row {
+    display: flex;
+    justify-content: center;
+    gap: clamp(6px, 2cqw, 12px);
+    font-size: clamp(22px, max(8cqh, 4.6cqw), 56px);
+}
+
+.clock-card .wx-icon {
+    display: inline-block;
+    width: 1.2em;
+    line-height: 1;
+    text-align: center;
+}
+
+.clock-card .rainline {
+    display: flex;
+    justify-content: center;
+    gap: clamp(4px, 1.6cqw, 10px);
+}
+
+.clock-card .wx-desc {
+    font-size: clamp(11px, max(3.2cqh, 2.2cqw), 18px);
+    line-height: 1.1;
+    text-align: center;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 @supports not (font-size: 1cqh) {
-    .clock-card .big   { font-size: clamp(24px, 8vh, 72px); }
-    .clock-card .muted { font-size: clamp(12px, 3vh, 22px); }
-    .clock-card .eyebrow { font-size: clamp(10px, 2vh, 14px); }
+    .clock-card .wx-desc {
+        font-size: clamp(11px, 2.5vh, 18px);
+        max-width: min(28ch, 60vw);
+    }
 }
