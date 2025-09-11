@@ -1,0 +1,42 @@
+.block > .card.clock-card,
+.card.clock-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-evenly;
+    container-type: size;
+    container-name: clock;
+}
+
+.clock-card > div{
+    display:flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.clock-card .big {
+    font-size: clamp(28px, max(10cqh, 6cqw), 72px);
+    line-height: 1;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.clock-card .muted {
+    font-size: clamp(13px, max(4cqh, 2.6cqw), 22px);
+    text-align: center;
+}
+
+.clock-card .eyebrow {
+    font-size: clamp(11px, max(4cqh, 2.6cqw), 22px);
+    text-align: center;
+}
+
+.card.clock-card {
+    gap: clamp(12px, 4cqh, 20px);
+}
+
+@supports not (font-size: 1cqh) {
+    .clock-card .big   { font-size: clamp(24px, 8vh, 72px); }
+    .clock-card .muted { font-size: clamp(12px, 3vh, 22px); }
+    .clock-card .eyebrow { font-size: clamp(10px, 2vh, 14px); }
+}
