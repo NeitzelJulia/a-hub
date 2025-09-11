@@ -25,31 +25,27 @@ export function ClockCard() {
 
             <div>
                 <div className="eyebrow">Heute</div>
-                <div className="big" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span aria-hidden>{tIcon.emoji}</span>
+                <div className="muted wx-desc">{tIcon.label}</div> {/* ← NEU */}
+                <div className="big temp-row">
+                    <span className="wx-icon" aria-hidden>{tIcon.emoji}</span>
                     <span>{formatTemperatureCelsius(today?.max)}</span>
                 </div>
-                <div
-                    className="muted rainline"
-                    title={`Max. Regenwahrsch.: ${formatProbabilityPercent(today?.precipProbMax)}`}
-                >
+                <div className="muted rainline">
                     <span className="icon" aria-hidden>💧</span>
-                    <span>{formatProbabilityPercent(today?.precipProbMean)} · {formatPrecipitationMm(today?.precipSum)}</span>
+                    <span>{formatProbabilityPercent(today?.precipProbMax)} · {formatPrecipitationMm(today?.precipSum)}</span>
                 </div>
             </div>
 
             <div>
                 <div className="eyebrow">Morgen</div>
-                <div className="big" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span aria-hidden>{mIcon.emoji}</span>
+                <div className="muted wx-desc">{mIcon.label}</div> {/* ← NEU */}
+                <div className="big temp-row">
+                    <span className="wx-icon" aria-hidden>{mIcon.emoji}</span>
                     <span>{formatTemperatureCelsius(tomorrow?.max)}</span>
                 </div>
-                <div
-                    className="muted rainline"
-                    title={`Max. Regenwahrsch.: ${formatProbabilityPercent(tomorrow?.precipProbMax)}`}
-                >
+                <div className="muted rainline">
                     <span className="icon" aria-hidden>💧</span>
-                    <span>{formatTemperatureCelsius(tomorrow?.precipProbMean)} · {formatPrecipitationMm(tomorrow?.precipSum)}</span>
+                    <span>{formatProbabilityPercent(tomorrow?.precipProbMax)} · {formatPrecipitationMm(tomorrow?.precipSum)}</span>
                 </div>
             </div>
         </div>
