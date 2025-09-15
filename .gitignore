@@ -1,6 +1,10 @@
 .idea
 *.iml
 *.pem
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 #Backend
 /backend/HELP.md
