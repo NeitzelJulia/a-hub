@@ -9,11 +9,13 @@ import { makeNewPeer } from "../rtc/peer";
 import { setRemoteOfferSafe, sendAnswerSafe } from "../rtc/sdp";
 import { triggerChimeOnce } from "../utils/chime";
 import { addCandidateSafe } from "../rtc/candidate";
+import { useDoorbellHistoryLifecycle } from "../hooks/useDoorbellHistoryLifecycle";
 import "./DoorbellModal.css";
 import DoorbellStatus from "./DoorbellStatus.tsx";
 import DoorbellControls from "./DoorbellControls.tsx";
 
 const BAD_ICE = new Set<RTCIceConnectionState>(["failed", "disconnected", "closed"]);
+const INACTIVITY_MS = 15000;
 
 export default function DoorbellModal() {
     // Refs
@@ -22,6 +24,10 @@ export default function DoorbellModal() {
     const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
     const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
     const chimeTriggeredRef = useRef<boolean>(false);
+
+    // Interaktions-/Timer-Refs
+    const interactedRef = useRef<boolean>(false);
+    const inactivityTimerRef = useRef<number | null>(null);
 
     // State
     const [wsOpen, setWsOpen] = useState(false);
@@ -36,6 +42,33 @@ export default function DoorbellModal() {
         throw new Error("VITE_SIGNALING_WS_URL muss gesetzt sein!");
     }
     const WS_URL: string = import.meta.env.VITE_SIGNALING_WS_URL;
+
+    // DB-History Lifecycle
+    const { onCallStart, onAnswered, startTalk, onCallEnd } = useDoorbellHistoryLifecycle();
+
+    // Inaktivitäts-Timer
+    const clearInactivity = useCallback(() => {
+        if (inactivityTimerRef.current !== null) {
+            window.clearTimeout(inactivityTimerRef.current);
+            inactivityTimerRef.current = null;
+        }
+    }, []);
+
+    const startInactivity = useCallback(() => {
+        clearInactivity();
+        inactivityTimerRef.current = window.setTimeout(() => {
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                    ws.send(JSON.stringify({ event: "bye" }));
+                } catch (e) {
+                    console.debug("auto-close: send bye failed:", e);
+                }
+            }
+            closeModalAndCleanup();
+            void onCallEnd();
+        }, INACTIVITY_MS);
+    }, [clearInactivity, onCallEnd]);
 
     // Media-Reset
     const resetMediaEls = useCallback(() => {
@@ -90,15 +123,27 @@ export default function DoorbellModal() {
 
     // Cleanup Wrapper
     const cleanup = useCallback(() => {
+        clearInactivity();
+
         try {
-            pcRef.current?.getSenders().forEach((s) => s.track?.stop());
+            const pc = pcRef.current;
+            if (pc) {
+                try {
+                    pc.getSenders().forEach((s) => {
+                        const tr = s.track;
+                        if (tr && typeof tr.stop === "function") tr.stop();
+                    });
+                } catch (e) {
+                    console.warn("cleanup stop senders failed:", e);
+                }
+                try {
+                    pc.close();
+                } catch (e) {
+                    console.warn("cleanup pc close failed:", e);
+                }
+            }
         } catch (e) {
-            console.warn("cleanup stop senders failed:", e);
-        }
-        try {
-            pcRef.current?.close();
-        } catch (e) {
-            console.warn("cleanup pc close failed:", e);
+            console.warn("cleanup pc wrapper failed:", e);
         }
 
         pcRef.current = newPeer(); // bereit für nächsten Call
@@ -109,19 +154,30 @@ export default function DoorbellModal() {
         setAudible(false);
         setRemoteVolume(1);
         setErr(null);
-    }, [newPeer, resetMediaEls, resetIntercom]);
+        interactedRef.current = false;
+    }, [newPeer, resetMediaEls, resetIntercom, clearInactivity]);
 
     const closeModalAndCleanup = useCallback(() => {
         setModalOpen(false);
         cleanup();
     }, [cleanup]);
 
-    // Schlechte ICE-States -> aufräumen
+    // Schlechte ICE-States -> als Auto-Close behandeln
     useEffect(() => {
         if (BAD_ICE.has(iceConn)) {
+            // wie Auto-Close: Peer per bye informieren, Call enden
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                    ws.send(JSON.stringify({ event: "bye" }));
+                } catch (e) {
+                    console.debug("bad-ice: send bye failed:", e);
+                }
+            }
             closeModalAndCleanup();
+            void onCallEnd();
         }
-    }, [iceConn, closeModalAndCleanup]);
+    }, [iceConn, closeModalAndCleanup, onCallEnd]);
 
     // Offer-Flow
     const handleOffer = useCallback(
@@ -139,7 +195,12 @@ export default function DoorbellModal() {
             // UI sofort; Chime fire-and-forget
             setModalOpen(true);
             setErr(null);
+            interactedRef.current = false;
+            startInactivity();
             void triggerChimeOnce(chimeTriggeredRef, CHIME_ENDPOINT);
+
+            // DB: Event anlegen
+            void onCallStart();
 
             const resOffer = await setRemoteOfferSafe(pc, data);
             if (!resOffer.ok) {
@@ -154,7 +215,7 @@ export default function DoorbellModal() {
                 setErr(`Answer fehlgeschlagen: ${resAns.error}`);
             }
         },
-        [prepareForCall]
+        [prepareForCall, onCallStart, startInactivity]
     );
 
     const handleCandidate = useCallback(async (data: RTCIceCandidateInit) => {
@@ -166,7 +227,11 @@ export default function DoorbellModal() {
         }
     }, []);
 
-    const handleBye = closeModalAndCleanup;
+    // Remote-Bye -> lokal beenden (nicht als answered markieren, falls keine Interaktion)
+    const handleBye = useCallback(() => {
+        closeModalAndCleanup();
+        void onCallEnd();
+    }, [closeModalAndCleanup, onCallEnd]);
 
     // Bootstrap WS + Peer
     const signalingHandlers = useMemo(
@@ -200,13 +265,22 @@ export default function DoorbellModal() {
             a.muted = false;
             await a.play();
             setAudible(true);
+
+            // Interaktion -> answered + Timer stoppen
+            if (!interactedRef.current) {
+                interactedRef.current = true;
+                clearInactivity();
+                void onAnswered();
+            }
+            // Talkzeit erst mit hörbarem Ton zählen
+            startTalk();
         } catch (ex) {
             const m = ex instanceof Error ? ex.message : String(ex);
             console.warn("audio play failed:", ex);
             setErr(`Audio konnte nicht gestartet werden: ${m}`);
             a.muted = true; // zurückrollen
         }
-    }, [audible]);
+    }, [audible, onAnswered, startTalk, clearInactivity]);
 
     const changeRemoteVolume = useCallback((v: number) => {
         const a = remoteAudioRef.current;
@@ -218,11 +292,18 @@ export default function DoorbellModal() {
     const handleMicToggle = useCallback(async () => {
         if (!hasMicTrack) {
             await startIntercom();
+            // Interaktion -> answered + Timer stoppen
+            if (!interactedRef.current) {
+                interactedRef.current = true;
+                clearInactivity();
+                void onAnswered();
+            }
         } else {
             toggleMic();
         }
-    }, [hasMicTrack, startIntercom, toggleMic]);
+    }, [hasMicTrack, startIntercom, toggleMic, onAnswered, clearInactivity]);
 
+    // Manuelles Schließen = Interaktion -> answered (falls noch nicht), dann finish
     const hangup = useCallback(() => {
         const ws = wsRef.current;
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -232,8 +313,15 @@ export default function DoorbellModal() {
                 console.debug("send bye failed:", e);
             }
         }
+
+        if (!interactedRef.current) {
+            interactedRef.current = true;
+            void onAnswered();
+        }
+
         closeModalAndCleanup();
-    }, [closeModalAndCleanup]);
+        void onCallEnd();
+    }, [closeModalAndCleanup, onAnswered, onCallEnd]);
 
     const intercomText = useMemo(
         () => getIntercomText(intercomReady, micOn),

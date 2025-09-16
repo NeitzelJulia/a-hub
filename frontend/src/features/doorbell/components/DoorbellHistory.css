@@ -1,0 +1,45 @@
+.hist-list {
+    --hist-badge-w: 14ch;
+    --hist-date-w: 10ch;
+    --hist-time-w: 6ch;
+
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.card .list.hist-list > li { display: grid !important; }
+
+.hist-row {
+    grid-template-columns: var(--hist-badge-w) var(--hist-date-w) var(--hist-time-w) 1fr;
+    align-items: center;
+    column-gap: 16px;
+    min-height: 28px;
+    padding-block: 4px;
+}
+
+.hist-row > * { min-width: 0; }
+
+.hist-row .hist-badge {
+    box-sizing: border-box;
+    width: 100%;
+    justify-self: start;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hist-row .hist-date,
+.hist-row .hist-time {
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.hist-row .hist-extra { justify-self: start; }
