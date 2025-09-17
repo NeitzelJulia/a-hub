@@ -4,6 +4,7 @@ import net.fortuna.ical4j.data.ParserException;
 import net.fortuna.ical4j.model.Property;
 import org.example.backend.exception.WasteImportException;
 import org.example.backend.model.waste.WasteEventImportDto;
+import org.example.backend.model.waste.WasteNextDto;
 import org.example.backend.model.waste.WasteType;
 import org.example.backend.repo.WasteRepository;
 import org.springframework.core.io.ClassPathResource;
@@ -27,7 +28,7 @@ import java.util.Base64;
 import java.util.List;
 
 @Service
-public class WasteImportService {
+public class WasteService {
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Europe/Berlin");
     private static final String DEFAULT_RESOURCE = "waste-calendar.ics";
 
@@ -35,10 +36,23 @@ public class WasteImportService {
     private final ZoneId zone;
     private final String defaultResource;
 
-    public WasteImportService(WasteRepository repo) {
+    public WasteService(WasteRepository repo) {
         this.repo = repo;
         this.zone = DEFAULT_ZONE;
         this.defaultResource = DEFAULT_RESOURCE;
+    }
+
+    public List<WasteNextDto> getDtosInWindow(LocalDate fromInclusive, int days) {
+        int span = Math.clamp(days, 1, 60);
+        LocalDate toInclusive = fromInclusive.plusDays(span - 1);
+
+        return repo.getWasteEventsInRange(fromInclusive, toInclusive).stream()
+                .map(e -> new WasteNextDto(
+                        e.dtstart().toString(),
+                        e.type().name().toLowerCase(java.util.Locale.ROOT),
+                        e.summary()
+                ))
+                .toList();
     }
 
     @Transactional
