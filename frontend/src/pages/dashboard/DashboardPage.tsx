@@ -1,6 +1,7 @@
 import { DashboardLayout } from "../../features/dashboard";
 import "./DashboardPage.css";
 import {ClockCard} from "../../features/dashboard/ui/ClockCard.tsx";
+import DoorbellHistory from "../../features/doorbell/components/DoorbellHistory.tsx";
 
 export default function DashboardPage() {
     return (
@@ -26,23 +27,7 @@ export default function DashboardPage() {
             }
 
             mainLeft={
-                <div className="card">
-                    <div className="title">Klingel-Historie</div>
-                    <ul className="list">
-                        <li>
-                            <span className="badge ok">angenommen</span>
-                            <span className="item-text">09:42 · Besucher</span>
-                        </li>
-                        <li>
-                            <span className="badge warn">verpasst</span>
-                            <span className="item-text">07:15 · Lieferung</span>
-                        </li>
-                        <li>
-                            <span className="badge ok">angenommen</span>
-                            <span className="item-text">Gestern · 18:03</span>
-                        </li>
-                    </ul>
-                </div>
+                <DoorbellHistory limit={4} />
             }
 
             mainRight={
