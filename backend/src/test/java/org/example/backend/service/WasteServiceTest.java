@@ -6,12 +6,19 @@ import org.example.backend.model.waste.WasteEventImportDto;
 import org.example.backend.model.waste.WasteNextDto;
 import org.example.backend.model.waste.WasteType;
 import org.example.backend.repo.WasteRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.lang.reflect.Method;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -26,6 +33,23 @@ class WasteServiceTest {
 
     private WasteService newService() {
         return new WasteService(repo);
+    }
+
+    private Method toLocalDateMethod;
+
+    @BeforeEach
+    void setupReflection() throws Exception {
+        toLocalDateMethod = WasteService.class.getDeclaredMethod(
+                "toLocalDate", java.time.temporal.Temporal.class);
+        toLocalDateMethod.setAccessible(true);
+    }
+
+    private LocalDate callToLocalDate(Object temporal) {
+        try {
+            return (LocalDate) toLocalDateMethod.invoke(newService(), temporal);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test
@@ -96,5 +120,41 @@ class WasteServiceTest {
     void loadAndParse_missingResource_throwsWasteImportException() {
         var service = newService();
         assertThrows(WasteImportException.class, () -> service.loadAndParse("does-not-exist.ics"));
+    }
+
+    @Test
+    void toLocalDate_returnsNullForNull() {
+        assertNull(callToLocalDate(null));
+    }
+
+    @Test
+    void toLocalDate_acceptsLocalDate() {
+        var d = LocalDate.of(2025, 9, 18);
+        assertEquals(d, callToLocalDate(d));
+    }
+
+    @Test
+    void toLocalDate_fromLocalDateTime() {
+        var ldt = LocalDateTime.of(2025, 9, 18, 10, 30);
+        assertEquals(LocalDate.of(2025, 9, 18), callToLocalDate(ldt));
+    }
+
+    @Test
+    void toLocalDate_fromZonedDateTime_convertsToEuropeBerlin() {
+        // 2025-09-21T22:30Z -> Europe/Berlin (CEST, +2) = 2025-09-22T00:30 -> 2025-09-22
+        var zdtUtc = ZonedDateTime.of(2025, 9, 21, 22, 30, 0, 0, ZoneOffset.UTC);
+        assertEquals(LocalDate.of(2025, 9, 22), callToLocalDate(zdtUtc));
+    }
+
+    @Test
+    void toLocalDate_fromOffsetDateTime_convertsToEuropeBerlin() {
+        var odt = OffsetDateTime.of(2025, 9, 21, 22, 30, 0, 0, ZoneOffset.UTC);
+        assertEquals(LocalDate.of(2025, 9, 22), callToLocalDate(odt));
+    }
+
+    @Test
+    void toLocalDate_fromInstant_convertsToEuropeBerlin() {
+        var inst = Instant.parse("2025-09-21T22:30:00Z");
+        assertEquals(LocalDate.of(2025, 9, 22), callToLocalDate(inst));
     }
 }
