@@ -1,5 +1,12 @@
 package org.example.backend.service;
 
+import net.fortuna.ical4j.model.Calendar;
+import net.fortuna.ical4j.model.component.VEvent;
+import net.fortuna.ical4j.model.property.Description;
+import net.fortuna.ical4j.model.property.DtStart;
+import net.fortuna.ical4j.model.property.Location;
+import net.fortuna.ical4j.model.property.Summary;
+import net.fortuna.ical4j.model.property.Uid;
 import org.example.backend.exception.WasteImportException;
 import org.example.backend.model.waste.WasteEvent;
 import org.example.backend.model.waste.WasteEventImportDto;
@@ -13,12 +20,9 @@ import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.lang.reflect.Method;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
-import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.time.*;
+import java.util.Base64;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -36,17 +40,29 @@ class WasteServiceTest {
     }
 
     private Method toLocalDateMethod;
+    private Method toImportDtosMethod;
 
     @BeforeEach
     void setupReflection() throws Exception {
-        toLocalDateMethod = WasteService.class.getDeclaredMethod(
-                "toLocalDate", java.time.temporal.Temporal.class);
+        toLocalDateMethod = WasteService.class.getDeclaredMethod("toLocalDate", java.time.temporal.Temporal.class);
         toLocalDateMethod.setAccessible(true);
+
+        toImportDtosMethod = WasteService.class.getDeclaredMethod("toImportDtos", Calendar.class);
+        toImportDtosMethod.setAccessible(true);
     }
 
     private LocalDate callToLocalDate(Object temporal) {
         try {
             return (LocalDate) toLocalDateMethod.invoke(newService(), temporal);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<WasteEventImportDto> callToImportDtos(Calendar cal) {
+        try {
+            return (List<WasteEventImportDto>) toImportDtosMethod.invoke(newService(), cal);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -156,5 +172,53 @@ class WasteServiceTest {
     void toLocalDate_fromInstant_convertsToEuropeBerlin() {
         var inst = Instant.parse("2025-09-21T22:30:00Z");
         assertEquals(LocalDate.of(2025, 9, 22), callToLocalDate(inst));
+    }
+
+    @Test
+    void toImportDtos_mapsEvents_generatesFallbackUid_andSkipsInvalid() {
+        var cal = new Calendar();
+
+        var e1 = new VEvent();
+        e1.add(new Summary("Gelbe Tonne"));
+        e1.add(new Description("Verpackungen"));
+        e1.add(new Location("Musterstraße 1"));
+        e1.add(new DtStart<>(LocalDate.of(2025, 9, 22)));
+        e1.add(new Uid("uid-1"));
+        cal.add(e1);
+
+        var e2 = new VEvent();
+        e2.add(new Summary("Blaue Altpapiertonne"));
+        var zdtUtc = ZonedDateTime.of(2025, 9, 21, 22, 30, 0, 0, ZoneOffset.UTC);
+        e2.add(new DtStart<>(zdtUtc));
+        cal.add(e2);
+
+        var e3 = new VEvent();
+        e3.add(new DtStart<>(LocalDate.of(2025, 9, 23)));
+        cal.add(e3);
+
+        var result = callToImportDtos(cal);
+
+        assertEquals(2, result.size());
+
+        var r1 = result.get(0);
+        assertEquals("uid-1", r1.uid());
+        assertEquals(LocalDate.of(2025, 9, 22), r1.dtstart());
+        assertEquals("Gelbe Tonne", r1.summary());
+        assertEquals("Verpackungen", r1.description());
+        assertEquals("Musterstraße 1", r1.location());
+        assertEquals(WasteType.PLASTIC, r1.type()); // Gelb -> plastic
+
+        var r2 = result.get(1);
+        assertNotNull(r2.uid());
+        assertEquals(LocalDate.of(2025, 9, 22), r2.dtstart());
+        assertEquals("Blaue Altpapiertonne", r2.summary());
+        assertNull(r2.description());
+        assertNull(r2.location());
+        assertEquals(WasteType.PAPER, r2.type());
+
+        String seed = "Blaue Altpapiertonne|2025-09-22";
+        String expectedUid = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(seed.getBytes(StandardCharsets.UTF_8));
+        assertEquals(expectedUid, r2.uid());
     }
 }
