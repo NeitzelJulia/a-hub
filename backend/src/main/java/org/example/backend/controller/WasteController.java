@@ -29,8 +29,8 @@ public class WasteController {
     }
 
     @PostMapping("/import")
-    public Map<String, Object> importFromResources(@RequestParam(required = false) String resource) {
-        int inserted = importService.importIcs(resource);
+    public Map<String, Object> importFromResources() {
+        int inserted = importService.importIcs();
         return Map.of("inserted", inserted);
     }
 }

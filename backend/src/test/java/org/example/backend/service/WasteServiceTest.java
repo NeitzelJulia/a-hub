@@ -113,7 +113,7 @@ class WasteServiceTest {
         doReturn(items).when(service).loadAndParse("waste-calendar.ics");
         when(repo.importWasteEvents(items)).thenReturn(List.of(10L, 11L));
 
-        int inserted = service.importIcs(null);
+        int inserted = service.importIcs();
 
         verify(service, times(1)).loadAndParse("waste-calendar.ics");
         verify(repo, times(1)).clearWasteEvents();
@@ -126,7 +126,7 @@ class WasteServiceTest {
         var service = Mockito.spy(newService());
         doThrow(new WasteImportException("kaputt", null)).when(service).loadAndParse(anyString());
 
-        assertThrows(WasteImportException.class, () -> service.importIcs("classpath:any.ics"));
+        assertThrows(WasteImportException.class, service::importIcs);
 
         verify(repo, never()).clearWasteEvents();
         verify(repo, never()).importWasteEvents(anyList());
@@ -200,7 +200,7 @@ class WasteServiceTest {
 
         assertEquals(2, result.size());
 
-        var r1 = result.get(0);
+        var r1 = result.getFirst();
         assertEquals("uid-1", r1.uid());
         assertEquals(LocalDate.of(2025, 9, 22), r1.dtstart());
         assertEquals("Gelbe Tonne", r1.summary());

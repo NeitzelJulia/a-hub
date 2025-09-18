@@ -56,9 +56,8 @@ public class WasteService {
     }
 
     @Transactional
-    public int importIcs(String resourceOrNull) {
-        String res = (resourceOrNull == null || resourceOrNull.isBlank()) ? defaultResource : resourceOrNull;
-        List<WasteEventImportDto> items = loadAndParse(res);
+    public int importIcs() {
+        List<WasteEventImportDto> items = loadAndParse(defaultResource);
         repo.clearWasteEvents();
         return repo.importWasteEvents(items).size();
     }

@@ -13,7 +13,6 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.hamcrest.Matchers.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -63,8 +62,8 @@ class WasteControllerTest {
     }
 
     @Test
-    void import_withResource_returns200_andCount() throws Exception {
-        when(service.importIcs("classpath:waste-calendar.ics")).thenReturn(5);
+    void import_returns200_andCount() throws Exception {
+        when(service.importIcs()).thenReturn(5);
 
         mvc.perform(post("/api/waste/import")
                         .param("resource", "classpath:waste-calendar.ics"))
@@ -72,20 +71,8 @@ class WasteControllerTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.inserted", is(5)));
 
-        verify(service, times(1)).importIcs("classpath:waste-calendar.ics");
+        verify(service, times(1)).importIcs();
         verifyNoMoreInteractions(service);
     }
 
-    @Test
-    void import_withoutResource_usesDefault_returns200_andCount() throws Exception {
-        when(service.importIcs(null)).thenReturn(2);
-
-        mvc.perform(post("/api/waste/import"))
-                .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.inserted", is(2)));
-
-        verify(service, times(1)).importIcs(isNull());
-        verifyNoMoreInteractions(service);
-    }
 }
