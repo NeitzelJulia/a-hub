@@ -5,6 +5,7 @@
 *.db-journal
 *.db-wal
 *.db-shm
+*.ics
 
 #Backend
 /backend/HELP.md
@@ -21,4 +22,3 @@
 /frontend/dist
 /frontend/dist-ssr
 /frontend/*.local
-
