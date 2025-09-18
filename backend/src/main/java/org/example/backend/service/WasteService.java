@@ -44,7 +44,7 @@ public class WasteService {
 
     public List<WasteNextDto> getDtosInWindow(LocalDate fromInclusive, int days) {
         int span = Math.clamp(days, 1, 60);
-        LocalDate toInclusive = fromInclusive.plusDays(span - 1);
+        LocalDate toInclusive = fromInclusive.plusDays(span - 1L);
 
         return repo.getWasteEventsInRange(fromInclusive, toInclusive).stream()
                 .map(e -> new WasteNextDto(
