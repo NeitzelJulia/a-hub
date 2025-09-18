@@ -2,6 +2,7 @@ import { DashboardLayout } from "../../features/dashboard";
 import "./DashboardPage.css";
 import {ClockCard} from "../../features/dashboard/ui/ClockCard.tsx";
 import DoorbellHistory from "../../features/doorbell/components/DoorbellHistory.tsx";
+import WasteCalendarCard from "../../features/dashboard/ui/WasteCalendarCard.tsx";
 
 export default function DashboardPage() {
     return (
@@ -49,13 +50,7 @@ export default function DashboardPage() {
             }
 
             bottomRight={
-                <div className="card">
-                    <div className="title">Müllkalender</div>
-                    <ul className="list compact">
-                        <li><span className="swatch paper" /> Morgen: Papier</li>
-                        <li><span className="swatch residual" /> Fr: Restmüll</li>
-                    </ul>
-                </div>
+                <WasteCalendarCard />
             }
         />
     );

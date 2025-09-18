@@ -1,0 +1,18 @@
+.wc-swatch {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 2px;
+    margin-right: 8px;
+    vertical-align: center;
+    flex: 0 0 auto;
+    background: var(--wc-color, #9ca3af);
+}
+
+.wc-swatch.paper     { --wc-color: #3b82f6; }
+.wc-swatch.residual  { --wc-color: #6b7280; }
+.wc-swatch.bio       { --wc-color: #22c55e; }
+.wc-swatch.plastic   { --wc-color: #f59e0b; }
+.wc-swatch.glass     { --wc-color: #10b981; }
+.wc-swatch.hazardous { --wc-color: #ef4444; }
+.wc-swatch.unknown   { --wc-color: #9ca3af; }
